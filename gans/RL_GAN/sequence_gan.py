@@ -28,7 +28,7 @@ TRAIN_ITER = 1  # generator
 SEED = 88
 BATCH_SIZE = 64
 
-D_WEIGHT = 0.2
+D_WEIGHT = 0.5
 
 D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################################
@@ -262,6 +262,9 @@ def main():
     sess = tf.Session(config=config)
 
     def train_discriminator():
+        if D_WEIGHT == 0:
+            return
+
         negative_samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
 
         #  train discriminator
