@@ -8,6 +8,7 @@ from gen_dataloader import Gen_Data_loader
 from dis_dataloader import Dis_dataloader
 from text_classifier import TextCNN
 from rollout import ROLLOUT
+from target_lstm import TARGET_LSTM
 import io_utils
 import cPickle
 from rdkit import Chem, rdBase
@@ -21,14 +22,15 @@ rdBase.DisableLog('rdApp.error')
 EMB_DIM = 32
 HIDDEN_DIM = 32
 START_TOKEN = 0
-D_WEIGHT = 0.2
 
-D = max(int(5 * D_WEIGHT), 1)
-
-PRE_EPOCH_NUM =  240
+PRE_EPOCH_NUM =  1#240
 TRAIN_ITER = 1  # generator
 SEED = 88
 BATCH_SIZE = 64
+
+D_WEIGHT = 0.2
+
+D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################################
 
 TOTAL_BATCH = 800
@@ -45,7 +47,7 @@ dis_l2_reg_lambda = 0.2
 # Training parameters
 dis_batch_size = 64
 dis_num_epochs = 3
-dis_alter_epoch = 30
+dis_alter_epoch = 1#50
 
 
 ##############################################################################################
@@ -112,30 +114,6 @@ NUM_EMB = len(char_dict)
 def verify_sequence(decoded):
     return decoded != '' and Chem.MolFromSmiles(decoded) is not None
 
-def make_reward(train_smiles):
-    def reward(decoded):
-        if verify_sequence(decoded):
-            if decoded not in train_smiles:
-                return 1.
-            else:
-                return 0.3
-        else:
-            return 0.
-    def batch_reward(samples):
-        decoded = [decode_smile(sample) for sample in samples]
-        pct_unique = float(len(list(set(decoded)))) / len(decoded)
-
-        def count(x, xs):
-            ret = 0
-            for y in xs:
-                if y == x:
-                    ret += 1
-            return ret
-
-
-        return np.array([reward(sample) / count(sample, decoded) for sample in decoded])
-    return batch_reward
-
 SEQ_LENGTH = max(map(len, smiles))
 
 positive_samples = [encode_smile(smile, SEQ_LENGTH) for smile in smiles if verify_sequence(smile)]
@@ -164,6 +142,17 @@ def generate_samples(sess, trainable_model, batch_size, generated_num):
     return generated_samples
 
 
+def target_loss(sess, target_lstm, data_loader):
+    supervised_g_losses = []
+    data_loader.reset_pointer()
+
+    for it in xrange(data_loader.num_batch):
+        batch = data_loader.next_batch()
+        g_loss = sess.run(target_lstm.pretrain_loss, {target_lstm.x: batch})
+        supervised_g_losses.append(g_loss)
+
+    return np.mean(supervised_g_losses)
+
 
 
 def pre_train_epoch(sess, trainable_model, data_loader):
@@ -178,19 +167,53 @@ def pre_train_epoch(sess, trainable_model, data_loader):
     return np.mean(supervised_g_losses)
 
 
+
+# This is a hack. I don't even use LIkelihood data loader tbh
+likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)
+
+def pretrain(sess, generator, target_lstm, train_discriminator):
+    #samples = generate_samples(sess, target_lstm, BATCH_SIZE, generated_num)
+    gen_data_loader = Gen_Data_loader(BATCH_SIZE)
+    gen_data_loader.create_batches(positive_samples)
+
+    #  pre-train generator
+    print 'Start pre-training...'
+    for epoch in xrange(PRE_EPOCH_NUM):
+        print 'pre-train epoch:', epoch
+        loss = pre_train_epoch(sess, generator, gen_data_loader)
+        if epoch % 5 == 0:
+            samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+            likelihood_data_loader.create_batches(samples)
+            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+            print 'pre-train epoch ', epoch, 'test_loss ', test_loss, 'train_loss ', loss
+
+            print_molecules(samples, smiles)
+
+
+    samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+    likelihood_data_loader.create_batches(samples)
+    test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+
+    samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+    likelihood_data_loader.create_batches(samples)
+
+    print 'Start training discriminator...'
+    for i in range(dis_alter_epoch):
+        print 'epoch {}'.format(i)
+        train_discriminator()
+
 def main():
     random.seed(SEED)
     np.random.seed(SEED)
 
     #assert START_TOKEN == 0
 
-    gen_data_loader = Gen_Data_loader(BATCH_SIZE)
-    likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)
     vocab_size = NUM_EMB
     dis_data_loader = Dis_dataloader()
 
     best_score = 1000
     generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN)
+    target_lstm = TARGET_LSTM(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, 0)
 
     with tf.variable_scope('discriminator'):
         cnn = TextCNN(
@@ -213,29 +236,6 @@ def main():
     # config.gpu_options.per_process_gpu_memory_fraction = 0.5
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
-    sess.run(tf.global_variables_initializer())
-
-    gen_data_loader.create_batches(positive_samples)
-
-    #  pre-train generator
-    print 'Start pre-training...'
-    for epoch in xrange(PRE_EPOCH_NUM):
-        print 'pre-train epoch:', epoch
-        loss = pre_train_epoch(sess, generator, gen_data_loader)
-        if epoch % 5 == 0:
-            samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
-            likelihood_data_loader.create_batches(samples)
-            print 'pre-train epoch ', epoch, 'train_loss ', loss
-
-            print_molecules(samples, smiles)
-
-
-    samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
-    likelihood_data_loader.create_batches(samples)
-
-    samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
-    likelihood_data_loader.create_batches(samples)
-
 
     def train_discriminator():
         negative_samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
@@ -257,10 +257,17 @@ def main():
         print 'Discriminator loss: {} Accuracy: {}'.format(loss, accuracy)
 
 
-    print 'Start training discriminator...'
-    for i in range(dis_alter_epoch):
-        print 'epoch {}'.format(i)
-        train_discriminator()
+    # Pretrain is checkpointed and only execcutes if we don't find a checkpoint
+    saver = tf.train.Saver()
+    pretrain_ckpt_file = 'checkpoints/pretrain_ckpt'
+    if os.path.isfile(pretrain_ckpt_file + '.meta'):
+        saver.restore(sess, pretrain_ckpt_file)
+        print 'Pretrain loaded from previous checkpoint {}'.format(pretrain_ckpt_file)
+    else:
+        sess.run(tf.global_variables_initializer())
+        pretrain(sess, generator, target_lstm, train_discriminator)
+        path = saver.save(sess, pretrain_ckpt_file)
+        print 'Pretrain finished and saved at {}'.format(path)
 
     rollout = ROLLOUT(generator, 0.8)
 
@@ -279,8 +286,15 @@ def main():
 
         if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
             samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+            likelihood_data_loader.create_batches(samples)
+            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+            print 'total_batch: ', total_batch, 'test_loss: ', test_loss
 
             print_molecules(samples, smiles)
+
+            if test_loss < best_score:
+                best_score = test_loss
+                print 'best score: ', test_loss
 
         rollout.update_params()
 

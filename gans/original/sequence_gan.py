@@ -76,7 +76,7 @@ def print_molecules(model_samples, train_smiles):
         print s
     print 'Verified samples. Pct: {}'.format(pct(verified_samples, samples))
     for s in verified_samples[0:10]:
-    	print s
+        print s
     print 'Objective: {}'.format(objective(samples, verify_sequence,
         lambda x: x in train_smiles, SEQ_LENGTH))
 
@@ -257,7 +257,7 @@ def main():
     saver = tf.train.Saver()
     pretrain_ckpt_file = 'checkpoints/pretrain_ckpt'
     if os.path.isfile(pretrain_ckpt_file + '.meta'):
-    	saver.restore(sess, pretrain_ckpt_file)
+        saver.restore(sess, pretrain_ckpt_file)
         print 'Pretrain loaded from previous checkpoint {}'.format(pretrain_ckpt_file)
     else:
         sess.run(tf.global_variables_initializer())
@@ -272,7 +272,7 @@ def main():
 
     for total_batch in range(TOTAL_BATCH):
         print '#########################################################################'
-    	print 'Training generator with Reinforcement Learning. Epoch {}'.format(total_batch)
+        print 'Training generator with Reinforcement Learning. Epoch {}'.format(total_batch)
         for it in range(TRAIN_ITER):
             samples = generator.generate(sess)
             rewards = rollout.get_reward(sess, samples, 16, cnn)
