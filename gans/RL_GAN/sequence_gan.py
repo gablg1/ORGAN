@@ -114,6 +114,30 @@ NUM_EMB = len(char_dict)
 def verify_sequence(decoded):
     return decoded != '' and Chem.MolFromSmiles(decoded) is not None
 
+def make_reward(train_smiles):
+    def reward(decoded):
+        if verify_sequence(decoded):
+            if decoded not in train_smiles:
+                return 1.
+            else:
+                return 0.3
+        else:
+            return 0.
+    def batch_reward(samples):
+        decoded = [decode_smile(sample) for sample in samples]
+        pct_unique = float(len(list(set(decoded)))) / len(decoded)
+
+        def count(x, xs):
+            ret = 0
+            for y in xs:
+                if y == x:
+                    ret += 1
+            return ret
+
+
+        return np.array([reward(sample) / count(sample, decoded) for sample in decoded])
+    return batch_reward
+
 SEQ_LENGTH = max(map(len, smiles))
 
 positive_samples = [encode_smile(smile, SEQ_LENGTH) for smile in smiles if verify_sequence(smile)]
