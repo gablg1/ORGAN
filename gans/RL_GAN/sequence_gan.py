@@ -23,12 +23,12 @@ EMB_DIM = 32
 HIDDEN_DIM = 32
 START_TOKEN = 0
 
-PRE_EPOCH_NUM =  1#240
+PRE_EPOCH_NUM =  240
 TRAIN_ITER = 1  # generator
 SEED = 88
 BATCH_SIZE = 64
 
-D_WEIGHT = 0.5
+D_WEIGHT = 0
 
 D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################################
@@ -47,7 +47,7 @@ dis_l2_reg_lambda = 0.2
 # Training parameters
 dis_batch_size = 64
 dis_num_epochs = 3
-dis_alter_epoch = 1#50
+dis_alter_epoch = 50
 
 
 ##############################################################################################
@@ -307,6 +307,7 @@ def main():
         for it in range(TRAIN_ITER):
             samples = generator.generate(sess)
             rewards = rollout.get_reward(sess, samples, 16, cnn, make_reward(smiles), D_WEIGHT)
+            print(rewards)
             g_loss = generator.generator_step(sess, samples, rewards)
 
             print 'total_batch: ', total_batch, 'g_loss: ', g_loss
