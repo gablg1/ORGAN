@@ -12,6 +12,7 @@ from target_lstm import TARGET_LSTM
 import io_utils
 import cPickle
 from rdkit import Chem, rdBase
+from rdkit.Chem import Crippen
 
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
@@ -62,13 +63,6 @@ def pct(a, b):
         return 0
     return float(len(a)) / len(b)
 
-def objective(samples, verify_fn, in_train_fn, max_len):
-    unique_samples = list(set(samples))
-    verified = filter(verify_fn, unique_samples)
-    in_train = filter(in_train_fn, verified)
-    return pct(verified, samples) * (1 - pct(in_train, verified))
-    #count_unique = [len(set(sample)) for sample in samples]
-    #return pct(verified, samples) * (1 - pct(in_train, verified)) * (np.mean(count_unique) / float(max_len))
 
 def print_molecules(model_samples, train_smiles):
     samples = [decode_smile(s) for s in model_samples]
@@ -81,8 +75,7 @@ def print_molecules(model_samples, train_smiles):
     print 'Verified samples. Pct: {}'.format(pct(verified_samples, samples))
     for s in verified_samples[0:10]:
         print s
-    print 'Objective: {}'.format(objective(samples, verify_sequence,
-        lambda x: x in train_smiles, SEQ_LENGTH))
+    print 'Objective: {}'.format(objective(samples))
 
 def build_vocab(smiles, pad_char = '_', start_char = '^'):
     i = 1
@@ -98,6 +91,7 @@ def build_vocab(smiles, pad_char = '_', start_char = '^'):
 
 
 char_dict, ord_dict = build_vocab(smiles)
+print ord_dict.keys()
 
 def pad(smile, n, pad_char = '_'):
     if n < len(smile):
@@ -114,13 +108,29 @@ NUM_EMB = len(char_dict)
 def verify_sequence(decoded):
     return decoded != '' and Chem.MolFromSmiles(decoded) is not None
 
+#MODEL_PICKLE = 'solu.pkl'
+#with open(MODEL_PICKLE, "rb") as afile:
+#    solu_model = pickle.loads(afile.read())
+
+def solubility(smile):
+    df = pd.DataFrame({'smiles': [smile]})
+    df['morgan'] = addMorgan(df, col='smiles', nBits=512, radius=4)
+    X = np.array([np.array(i) for i in df['morgan'].values])
+    return solu_model.predict(X)[0]
+
+def logP(smile):
+    if verify_sequence(smile):
+        return Crippen.MolLogP(Chem.MolFromSmiles(smile))
+    return 0.
+
+
 def make_reward(train_smiles):
     def reward(decoded):
         if verify_sequence(decoded):
             if decoded not in train_smiles:
-                return 1.
+                return 0.1 * logP(decoded)
             else:
-                return 0.3
+                return 0.03 * logP(decoded)
         else:
             return 0.
     def batch_reward(samples):
@@ -137,6 +147,10 @@ def make_reward(train_smiles):
 
         return np.array([reward(sample) / count(sample, decoded) for sample in decoded])
     return batch_reward
+
+def objective(samples):
+    return np.mean([logP(smile) for smile in samples if verify_sequence(smile)])
+
 
 SEQ_LENGTH = max(map(len, smiles))
 
@@ -302,16 +316,6 @@ def main():
     print 'Start Reinforcement Training Generator...'
 
     for total_batch in range(TOTAL_BATCH):
-        print '#########################################################################'
-        print 'Training generator with Reinforcement Learning. Epoch {}'.format(total_batch)
-        for it in range(TRAIN_ITER):
-            samples = generator.generate(sess)
-            rewards = rollout.get_reward(sess, samples, 16, cnn, make_reward(smiles), D_WEIGHT)
-            print(rewards)
-            g_loss = generator.generator_step(sess, samples, rewards)
-
-            print 'total_batch: ', total_batch, 'g_loss: ', g_loss
-
         if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
             samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
             likelihood_data_loader.create_batches(samples)
@@ -323,6 +327,17 @@ def main():
             if test_loss < best_score:
                 best_score = test_loss
                 print 'best score: ', test_loss
+
+        print '#########################################################################'
+        print 'Training generator with Reinforcement Learning. Epoch {}'.format(total_batch)
+        for it in range(TRAIN_ITER):
+            samples = generator.generate(sess)
+            rewards = rollout.get_reward(sess, samples, 16, cnn, make_reward(smiles), D_WEIGHT)
+            print(rewards)
+            g_loss = generator.generator_step(sess, samples, rewards)
+
+            print 'total_batch: ', total_batch, 'g_loss: ', g_loss
+
 
         rollout.update_params()
 
