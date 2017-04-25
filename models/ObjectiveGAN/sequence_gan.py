@@ -128,9 +128,9 @@ def make_reward(train_smiles):
     def reward(decoded):
         if verify_sequence(decoded):
             if decoded not in train_smiles:
-                return 0.1 * logP(decoded)
+                return 1 * logP(decoded)
             else:
-                return 0.03 * logP(decoded)
+                return 0.3 * logP(decoded)
         else:
             return 0.
     def batch_reward(samples):
@@ -145,7 +145,7 @@ def make_reward(train_smiles):
             return ret
 
 
-        return np.array([reward(sample) / count(sample, decoded) for sample in decoded])
+        return np.array([reward(sample) * (pct_unique / count(sample, decoded)) ** 3 for sample in decoded])
     return batch_reward
 
 def objective(samples):
