@@ -16,15 +16,20 @@ def read_songs_txt(filename):
     with open(filename, 'rU') as file:
         data = []
         line = file.readline()
-        ignore_chars = {'X', 'T', '%', 'S', 'M', 'K', 'P', '\"', '\n', ' ', '(', ')', 'm', '-', '\\', '!', 't', 'r', 'i', 'l', 'z', '[', '+', 'n', 'o', '#'}
+        ignore_chars = {'T', '%', 'S', 'M', 'K', 'P', '\"', '\n', ' ', '(', ')', 'm', '-', '\\', '!', 't', 'r', 'i', 'l', 'z', '[', '+', 'n', 'o', '#'}
         notes = {'C', 'D', 'E', 'F', 'G', 'A', 'B', 'c', 'd', 'e', 'f', 'g', 'a', 'b'}
         prev_string = ""
         same_note = False
         on_bar = False
+        song = []
         while line != '':
             line = file.readline()
             if not line or line[0] in ignore_chars:
                 continue
+            # new song
+            if line[0] == 'X':
+                data.append(song)
+                song = []
             for c in line:
                 if c in ignore_chars:
                     continue
@@ -34,12 +39,12 @@ def read_songs_txt(filename):
                     # previous string was a note
                     if on_bar:
                         on_bar = False
-                        data.append(prev_string)
+                        song.append(prev_string)
                         prev_string = c
                     elif length != 0:
                         first = prev_string[length - 1]
                         if first in notes:
-                            data.append(prev_string)
+                            song.append(prev_string)
                             prev_string = c
                         elif first == '/':
                             prev_string = prev_string[1:]
@@ -50,27 +55,27 @@ def read_songs_txt(filename):
                 elif c in {'_', '^', '='}:
                     if not same_note:
                         same_note = True
-                    data.append(prev_string)
+                    song.append(prev_string)
                     prev_string = c
                 # likely to indicate length
                 elif c.isdigit():
                     # if in the same note, the num closes it up by indicating length - indicate end of note
                     if same_note:
-                        data.append(prev_string + c)
+                        song.append(prev_string + c)
                         prev_string = ""
                         same_note = False
                 # bars & repeats are separate from notes
                 elif c in {'|', ':'}:
                     if same_note:
-                        data.append(prev_string)
+                        song.append(prev_string)
                         prev_string = ""
                     if on_bar:
-                        data.append(prev_string + c) 
+                        song.append(prev_string + c) 
                         prev_string = ""
                         on_bar = False
                     else:
                         on_bar = True
-                        data.append(prev_string)
+                        song.append(prev_string)
                         prev_string = c
                     same_note = False
                 else:

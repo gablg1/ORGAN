@@ -99,7 +99,7 @@ char_dict, ord_dict = build_vocab(sequences)
 def pad(sequence, n, pad_char = '_'):
     if n < len(sequence):
         return sequence
-    return sequence + pad_char * (n - len(sequence))
+    return sequence + [pad_char] * (n - len(sequence))
 
 def unpad(smile, pad_char = '_'): return smile
 
