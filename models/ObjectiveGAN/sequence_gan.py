@@ -12,7 +12,10 @@ from target_lstm import TARGET_LSTM
 import io_utils
 import cPickle
 from rdkit import Chem, rdBase
-from rdkit.Chem import Crippen
+from rdkit.Chem import Crippen, MolFromSmiles
+from rdkit.Chem.rdMolDescriptors import GetMorganFingerprintAsBitVect
+import pandas as pd
+import pickle
 
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
@@ -67,15 +70,15 @@ def pct(a, b):
 def print_molecules(model_samples, train_smiles):
     samples = [decode_smile(s) for s in model_samples]
     unique_samples = list(set(samples))
-    print 'Unique samples. Pct: {}'.format(pct(unique_samples, samples))
+    print('Unique samples. Pct: {}'.format(pct(unique_samples, samples)))
     verified_samples = filter(verify_sequence, samples)
 
     for s in samples[0:10]:
-        print s
-    print 'Verified samples. Pct: {}'.format(pct(verified_samples, samples))
+        print(s)
+    print('Verified samples. Pct: {}'.format(pct(verified_samples, samples)))
     for s in verified_samples[0:10]:
-        print s
-    print 'Objective: {}'.format(objective(samples))
+        print(s)
+    print('Objective: {}'.format(objective(samples)))
 
 def build_vocab(smiles, pad_char = '_', start_char = '^'):
     i = 1
@@ -91,7 +94,7 @@ def build_vocab(smiles, pad_char = '_', start_char = '^'):
 
 
 char_dict, ord_dict = build_vocab(smiles)
-print ord_dict.keys()
+print(ord_dict.keys())
 
 def pad(smile, n, pad_char = '_'):
     if n < len(smile):
@@ -109,11 +112,11 @@ def verify_sequence(decoded):
     return decoded != '' and Chem.MolFromSmiles(decoded) is not None
 
 #MODEL_PICKLE = 'solu.pkl'
-#with open(MODEL_PICKLE, "rb") as afile:
-#    solu_model = pickle.loads(afile.read())
+#with open(MODEL_PICKLE, "r") as afile:
+#    solu_model = cPickle.load(afile)
 
 def solubility(smile):
-    df = pd.DataFrame({'smiles': [smile]})
+    df = pd.DataFrame({'smiles': [smiles]})
     df['morgan'] = addMorgan(df, col='smiles', nBits=512, radius=4)
     X = np.array([np.array(i) for i in df['morgan'].values])
     return solu_model.predict(X)[0]
@@ -215,15 +218,15 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
     gen_data_loader.create_batches(positive_samples)
 
     #  pre-train generator
-    print 'Start pre-training...'
+    print('Start pre-training...')
     for epoch in xrange(PRE_EPOCH_NUM):
-        print 'pre-train epoch:', epoch
+        print('pre-train epoch:', epoch)
         loss = pre_train_epoch(sess, generator, gen_data_loader)
         if epoch % 5 == 0:
             samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
             likelihood_data_loader.create_batches(samples)
             test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-            print 'pre-train epoch ', epoch, 'test_loss ', test_loss, 'train_loss ', loss
+            print('pre-train epoch ', epoch, 'test_loss ', test_loss, 'train_loss ', loss)
 
             print_molecules(samples, smiles)
 
@@ -235,9 +238,9 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
     samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
     likelihood_data_loader.create_batches(samples)
 
-    print 'Start training discriminator...'
+    print('Start training discriminator...')
     for i in range(dis_alter_epoch):
-        print 'epoch {}'.format(i)
+        print('epoch {}'.format(i))
         train_discriminator()
 
 def main():
@@ -295,7 +298,8 @@ def main():
                 cnn.dropout_keep_prob: dis_dropout_keep_prob
             }
             _, step, loss, accuracy = sess.run([dis_train_op, dis_global_step, cnn.loss, cnn.accuracy], feed)
-        print 'Discriminator loss: {} Accuracy: {}'.format(loss, accuracy)
+        print('Discriminator loss: {} Accuracy: {}'.format(loss, accuracy))
+
 
 
     # Pretrain is checkpointed and only execcutes if we don't find a checkpoint
@@ -303,48 +307,48 @@ def main():
     pretrain_ckpt_file = 'checkpoints/pretrain_ckpt'
     if os.path.isfile(pretrain_ckpt_file + '.meta'):
         saver.restore(sess, pretrain_ckpt_file)
-        print 'Pretrain loaded from previous checkpoint {}'.format(pretrain_ckpt_file)
+        print('Pretrain loaded from previous checkpoint {}'.format(pretrain_ckpt_file))
     else:
         sess.run(tf.global_variables_initializer())
         pretrain(sess, generator, target_lstm, train_discriminator)
         path = saver.save(sess, pretrain_ckpt_file)
-        print 'Pretrain finished and saved at {}'.format(path)
+        print('Pretrain finished and saved at {}'.format(path))
 
     rollout = ROLLOUT(generator, 0.8)
 
-    print '#########################################################################'
-    print 'Start Reinforcement Training Generator...'
+    print('#########################################################################')
+    print('Start Reinforcement Training Generator...')
 
     for total_batch in range(TOTAL_BATCH):
         if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
             samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
             likelihood_data_loader.create_batches(samples)
             test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-            print 'total_batch: ', total_batch, 'test_loss: ', test_loss
+            print('total_batch: ', total_batch, 'test_loss: ', test_loss)
 
             print_molecules(samples, smiles)
 
             if test_loss < best_score:
                 best_score = test_loss
-                print 'best score: ', test_loss
+                print('best score: ', test_loss)
 
-        print '#########################################################################'
-        print 'Training generator with Reinforcement Learning. Epoch {}'.format(total_batch)
+        print('#########################################################################')
+        print('Training generator with Reinforcement Learning. Epoch {}'.format(total_batch))
         for it in range(TRAIN_ITER):
             samples = generator.generate(sess)
             rewards = rollout.get_reward(sess, samples, 16, cnn, make_reward(smiles), D_WEIGHT)
             print(rewards)
             g_loss = generator.generator_step(sess, samples, rewards)
 
-            print 'total_batch: ', total_batch, 'g_loss: ', g_loss
+            print('total_batch: ', total_batch, 'g_loss: ', g_loss)
 
 
         rollout.update_params()
 
         # generate for discriminator
-        print 'Start training discriminator'
+        print('Start training discriminator')
         for i in range(D):
-            print 'epoch {}'.format(i)
+            print('epoch {}'.format(i))
             train_discriminator()
 
 

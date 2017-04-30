@@ -54,6 +54,7 @@ DATA_DIR = "../../data"
 #sequences = [sequence for sequence in sequences if len(sequence) < 70]
 #smiles = io_utils.read_smiles_smi(os.path.join(DATA_DIR, '250k.smi'))
 sequences = io_utils.read_songs_txt(os.path.join(DATA_DIR, 'jigs.txt'))
+print sequences[0]
 
 def pct(a, b):
     if len(b) == 0:
@@ -101,12 +102,17 @@ def pad(sequence, n, pad_char = '_'):
         return sequence
     return sequence + [pad_char] * (n - len(sequence))
 
-def unpad(smile, pad_char = '_'): return smile
+def unpad(sequence, pad_char = '_'):
+    sequence = sequence[::-1]
+    for i, elem in enumerate(sequence):
+        if elem != pad_char:
+            return sequence[i:][::-1]
+    return sequence
 
 def encode_smile(sequence, max_len): return [char_dict[c] for c in pad(sequence, max_len)]
 def decode_smile(ords): return unpad(' '.join([ord_dict[o] for o in ords]))
 
-NUM_EMB = len(char_dict)
+NUM_EMB = len(char_dict) +1
 
 def verify_sequence(decoded):
     return True
