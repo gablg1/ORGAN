@@ -26,6 +26,7 @@ rdBase.DisableLog('rdApp.error')
 EMB_DIM = 32
 HIDDEN_DIM = 32
 START_TOKEN = 0
+SAMPLE_NUM = 6400
 
 PRE_EPOCH_NUM =  240
 TRAIN_ITER = 1  # generator
@@ -68,6 +69,7 @@ def pct(a, b):
 
 
 def print_molecules(model_samples, train_smiles):
+    print('Total number of samples: {}'.format(len(model_samples)))
     samples = [decode_smile(s) for s in model_samples]
     unique_samples = list(set(samples))
     print('Unique samples. Pct: {}'.format(pct(unique_samples, samples)))
@@ -158,9 +160,9 @@ def objective(samples):
 SEQ_LENGTH = max(map(len, smiles))
 
 positive_samples = [encode_smile(smile, SEQ_LENGTH) for smile in smiles if verify_sequence(smile)]
-generated_num = len(positive_samples)
+POSITIVE_NUM = len(positive_samples)
 
-print('Starting SeqGAN with {} positive samples'.format(generated_num))
+print('Starting SeqGAN with {} positive samples'.format(POSITIVE_NUM))
 print('Size of alphabet is {}'.format(NUM_EMB))
 print('Sequence length is {}'.format(SEQ_LENGTH))
 
@@ -223,7 +225,7 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
         print('pre-train epoch:', epoch)
         loss = pre_train_epoch(sess, generator, gen_data_loader)
         if epoch % 5 == 0:
-            samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+            samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(samples)
             test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
             print('pre-train epoch ', epoch, 'test_loss ', test_loss, 'train_loss ', loss)
@@ -231,11 +233,11 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
             print_molecules(samples, smiles)
 
 
-    samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+    samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
     likelihood_data_loader.create_batches(samples)
     test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
 
-    samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+    samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
     likelihood_data_loader.create_batches(samples)
 
     print('Start training discriminator...')
@@ -282,7 +284,7 @@ def main():
         if D_WEIGHT == 0:
             return
 
-        negative_samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+        negative_samples = generate_samples(sess, generator, BATCH_SIZE, POSITIVE_NUM)
 
         #  train discriminator
         dis_x_train, dis_y_train = dis_data_loader.load_train_data(positive_samples, negative_samples)
@@ -321,7 +323,10 @@ def main():
 
     for total_batch in range(TOTAL_BATCH):
         if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
-            samples = generate_samples(sess, generator, BATCH_SIZE, generated_num)
+            if total_batch % 10 == 0:
+                samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM * 10)
+            else:
+                samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(samples)
             test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
             print('total_batch: ', total_batch, 'test_loss: ', test_loss)
