@@ -32,7 +32,7 @@ TRAIN_ITER = 1  # generator
 SEED = 88
 BATCH_SIZE = 64
 
-D_WEIGHT = 0
+D_WEIGHT = 0.5
 
 D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################################
