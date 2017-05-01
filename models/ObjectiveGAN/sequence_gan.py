@@ -27,6 +27,7 @@ EMB_DIM = 32
 HIDDEN_DIM = 32
 START_TOKEN = 0
 SAMPLE_NUM = 6400
+BIG_SAMPLE_NUM = SAMPLE_NUM * 10
 
 PRE_EPOCH_NUM =  240
 TRAIN_ITER = 1  # generator
@@ -74,11 +75,12 @@ def print_molecules(model_samples, train_smiles):
     unique_samples = list(set(samples))
     print('Unique samples. Pct: {}'.format(pct(unique_samples, samples)))
     verified_samples = filter(verify_sequence, samples)
+    unverified_samples = [sample for sample in samples if not verify_sequence(sample)]
 
-    for s in samples[0:10]:
+    for s in unverified_samples[0:10]:
         print(s)
     print('Verified samples. Pct: {}'.format(pct(verified_samples, samples)))
-    for s in verified_samples[0:10]:
+    for s in verified_samples[0:20]:
         print(s)
     print('Objective: {}'.format(objective(samples)))
 
@@ -149,8 +151,7 @@ def make_reward(train_smiles):
                     ret += 1
             return ret
 
-
-        return np.array([reward(sample) * (pct_unique / count(sample, decoded)) ** 3 for sample in decoded])
+        return np.array([reward(sample) * pct_unique / count(sample, decoded) for sample in decoded])
     return batch_reward
 
 def objective(samples):
@@ -316,6 +317,10 @@ def main():
         path = saver.save(sess, pretrain_ckpt_file)
         print('Pretrain finished and saved at {}'.format(path))
 
+    print('Testing pretrain model')
+    samples = generate_samples(sess, generator, BATCH_SIZE, BIG_SAMPLE_NUM)
+    print_molecules(samples, smiles)
+
     rollout = ROLLOUT(generator, 0.8)
 
     print('#########################################################################')
@@ -324,7 +329,7 @@ def main():
     for total_batch in range(TOTAL_BATCH):
         if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
             if total_batch % 10 == 0:
-                samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM * 10)
+                samples = generate_samples(sess, generator, BATCH_SIZE, BIG_SAMPLE_NUM)
             else:
                 samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(samples)
