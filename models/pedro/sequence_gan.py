@@ -24,7 +24,7 @@ TRAIN_ITER = 1  # generator
 SEED = 88
 BATCH_SIZE = 64
 
-D_WEIGHT = 0
+D_WEIGHT = 0.5
 
 D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################################
@@ -54,7 +54,6 @@ DATA_DIR = "../../data"
 #sequences = [sequence for sequence in sequences if len(sequence) < 70]
 #smiles = io_utils.read_smiles_smi(os.path.join(DATA_DIR, '250k.smi'))
 sequences = io_utils.read_songs_txt(os.path.join(DATA_DIR, 'jigs.txt'))
-print sequences[0]
 
 def pct(a, b):
     if len(b) == 0:
@@ -103,23 +102,41 @@ def pad(sequence, n, pad_char = '_'):
     return sequence + [pad_char] * (n - len(sequence))
 
 def unpad(sequence, pad_char = '_'):
-    sequence = sequence[::-1]
     for i, elem in enumerate(sequence):
-        if elem != pad_char:
-            return sequence[i:][::-1]
+        if elem == pad_char:
+            return sequence[:i]
     return sequence
 
 def encode_smile(sequence, max_len): return [char_dict[c] for c in pad(sequence, max_len)]
 def decode_smile(ords): return unpad(' '.join([ord_dict[o] for o in ords]))
 
-NUM_EMB = len(char_dict) +1
+NUM_EMB = len(char_dict) + 1
 
 def verify_sequence(decoded):
     return True
 
+def ratio_of_steps(sequence):
+    notes = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'c', 'd', 'e', 'f', 'g', 'a', 'b',
+    'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'', 'C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,']
+
+    def clean(note): return note.strip("_^=\\0123456789")
+
+    def is_note(note): return clean(note) in notes
+    clean_sequence = [clean(note) for note in sequence if is_note(note)]
+
+    notes_and_successors = [(note, clean_sequence[i+1]) for i, note in enumerate(clean_sequence) if i < len(clean_sequence) - 1]
+
+    def is_step(note, succ): return abs(notes.indexOf(note) - notes.indexOf(succ)) == 1
+    return np.mean([(1 if is_step(note) else 0) for note in clean_sequence])
+
+def ratio_of_C(sequence):
+    def is_C(note): return 1 if note == 'C' else 0 
+    return np.mean([is_C(elem) for elem in sequence])
+
 def make_reward(train_smiles):
     def reward(decoded):
-            return 1.
+        return ratio_of_C(decoded)
+
     def batch_reward(samples):
         decoded = [decode_smile(sample) for sample in samples]
         pct_unique = float(len(list(set(decoded)))) / len(decoded)
