@@ -116,8 +116,8 @@ def verify_sequence(decoded):
     return True
 
 def ratio_of_steps(sequence):
-    notes = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'c', 'd', 'e', 'f', 'g', 'a', 'b',
-    'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'', 'C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,']
+    notes = ['C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
+    'c', 'd', 'e', 'f', 'g', 'a', 'b', 'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'']
 
     def clean(note): return note.strip("_^=\\0123456789")
 
@@ -126,16 +126,13 @@ def ratio_of_steps(sequence):
 
     notes_and_successors = [(note, clean_sequence[i+1]) for i, note in enumerate(clean_sequence) if i < len(clean_sequence) - 1]
 
-    def is_step(note, succ): return abs(notes.indexOf(note) - notes.indexOf(succ)) == 1
-    return np.mean([(1 if is_step(note) else 0) for note in clean_sequence])
+    def is_step(note, succ): return abs(notes.index(note) - notes.index(succ)) == 1
+    return np.mean([(1 if is_step(note, successor) else 0) for note, successor in notes_and_successors]) if len(sequence) != 0 else 0
 
-def ratio_of_C(sequence):
-    def is_C(note): return 1 if note == 'C' else 0 
-    return np.mean([is_C(elem) for elem in sequence])
 
 def make_reward(train_smiles):
     def reward(decoded):
-        return ratio_of_C(decoded)
+        return ratio_of_steps(decoded)
 
     def batch_reward(samples):
         decoded = [decode_smile(sample) for sample in samples]
