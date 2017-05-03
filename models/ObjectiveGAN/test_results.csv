@@ -1,0 +1,2 @@
+exp_name,Batch,test_loss,G_loss,D_loss_0,Accuracy_0,D_loss_1,Accuracy_1,mean_length,n_samples,uniq_samples,good_samples,bad_samples,diversity,novelty,model_samples
+test,0,8.8824300766,824.090393066,1.72411823273,1.0,1.60776817799,0.93548387289,13.647171875,64000,59704,6755,57245,0.654471950359,0.80547742413,test_0

@@ -8,7 +8,7 @@ from rdkit import rdBase
 from rdkit.Chem import PandasTools
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
-from rdkit.Chem import Crippen, MolFromSmiles
+from rdkit.Chem import Crippen, MolFromSmiles, MolToSmiles
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
 #====== math utility
@@ -119,7 +119,8 @@ def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=
     unverified_samples = filter(lambda v: not verify_sequence(v), samples)
     results['good_samples'] = len(verified_samples)
     results['bad_samples'] = len(unverified_samples)
-    metrics = {'novelty': batch_novelty, 'diversity': batch_diversity}
+    metrics = {'novelty': batch_novelty,
+               'hard novelty': batch_hardnovelty, 'diversity': batch_diversity}
     for key, func in metrics.items():
         results[key] = np.mean(func(verified_samples, train_samples))
 
@@ -146,7 +147,7 @@ def print_results(verified_samples, unverified_samples, results={}):
     percent = results['bad_samples'] / float(results['n_samples']) * 100
     print('Unverified  : {:6d} ({:2.2f}%)'.format(
         results['bad_samples'], percent))
-    for i in ['novelty', 'diversity']:
+    for i in ['novelty', 'hardnovelty', 'diversity']:
         print('{:11s} : {:1.4f}'.format(i, results[i]))
 
     print('\nExample of good samples:')
@@ -193,8 +194,18 @@ def batch_novelty(smiles, train_smiles):
     return np.mean([novelty(smile, train_smiles) for smile in smiles])
 
 
+def batch_hardnovelty(smiles, train_smiles):
+    return np.mean([hard_novelty(smile, train_smiles) for smile in smiles])
+
+
 def novelty(smile, train_smiles):
-    newness = 1.0 if smile not in train_smiles else 0.0
+    newness = 1.0 if canon_smile not in train_smiles else 0.0
+    return newness
+
+
+def hard_novelty(smile, train_smiles):
+    canon_smiles = MolToSmiles(MolFromSmiles(smile))
+    newness = 1.0 if canon_smile not in train_smiles else 0.0
     return newness
 
 

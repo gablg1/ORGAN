@@ -249,9 +249,10 @@ def main():
 
     # Pretrain is checkpointed and only execcutes if we don't find a checkpoint
     saver = tf.train.Saver()
-    if not os.path.exists('checkpoints'):
-        os.makedirs('checkpoints')
-    pretrain_ckpt_file = 'checkpoints/{}_pretrain_ckpt'.format(PREFIX)
+    ckpt_dir = 'checkpoints/{}_pretrain'.format(PREFIX)
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
+    pretrain_ckpt_file = os.path.join(ckpt_dir, 'pretrain_ckpt')
     if os.path.isfile(pretrain_ckpt_file + '.meta'):
         saver.restore(sess, pretrain_ckpt_file)
         print('Pretrain loaded from previous checkpoint {}'.format(
@@ -277,26 +278,26 @@ def main():
     for nbatch in range(TOTAL_BATCH):
         results = OrderedDict({'exp_name': PREFIX})
         if nbatch % 1 == 0 or nbatch == TOTAL_BATCH - 1:
+            print('* Making samples')
             if nbatch % 10 == 0:
-                samples = generate_samples(
+                gen_samples = generate_samples(
                     sess, generator, BATCH_SIZE, BIG_SAMPLE_NUM)
             else:
-                samples = generate_samples(
+                gen_samples = generate_samples(
                     sess, generator, BATCH_SIZE, SAMPLE_NUM)
-            likelihood_data_loader.create_batches(samples)
+            likelihood_data_loader.create_batches(gen_samples)
             test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
             print('batch_num: {}'.format(nbatch))
             print('test_loss: {}'.format(test_loss))
             results['Batch'] = nbatch
             results['test_loss'] = test_loss
-            # print_molecules(samples, smiles, results)
 
             if test_loss < best_score:
                 best_score = test_loss
                 print('best score: %f' % test_loss)
 
         print('#########################################################################')
-        print('Training generator with Reinforcement Learning.')
+        print('-> Training generator with RL.')
         print('G Epoch {}'.format(nbatch))
 
         for it in range(TRAIN_ITER):
@@ -313,7 +314,7 @@ def main():
         rollout.update_params()
 
         # generate for discriminator
-        print('Start training discriminator')
+        print('-> Training Discriminator')
         for i in range(D):
             print('D_Epoch {}'.format(i))
             d_loss, accuracy = train_discriminator()
@@ -321,7 +322,7 @@ def main():
             results['Accuracy_{}'.format(i)] = accuracy
 
         # results
-        mm.compute_results(samples, train_samples, ord_dict, results)
+        mm.compute_results(gen_samples, train_samples, ord_dict, results)
         results_rows.append(results)
         if nbatch % 20 == 0:
             pd.DataFrame(results_rows).to_csv(RESULTS_FILE, index=False)
@@ -330,8 +331,14 @@ def main():
     pd.DataFrame(results_rows).to_csv(RESULTS_FILE, index=False)
     # save models
     model_saver = tf.train.Saver()
-    model_saver.save(sess, "checkpoints/{}_model.ckpt".format(PREFIX))
-    print('** FINISHED **')
+    ckpt_dir = 'checkpoints/{}'.format(PREFIX)
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
+    ckpt_file = os.path.join(ckpt_dir, '{}_model.ckpt'.format(PREFIX))
+    path = model_saver.save(sess, ckpt_file)
+    print('Model saved at {}'.format(path))
+
+    print('\n*** FINISHED ***')
     return
 
 if __name__ == '__main__':
