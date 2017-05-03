@@ -125,7 +125,7 @@ def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=
 
     # save smiles
     if 'Batch' in results.keys():
-        smi_name = 'samples_%s' % str(results['Batch'])
+        smi_name = '{}_{}'.format(results['exp_name'], results['Batch'])
         save_smi(smi_name, samples)
         results['model_samples'] = smi_name
     # print results
