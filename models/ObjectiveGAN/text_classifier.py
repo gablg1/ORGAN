@@ -1,7 +1,7 @@
 # This code is mainly borrowed from https://github.com/dennybritz/cnn-text-classification-tf
 
 import tensorflow as tf
-
+from builtins import range
 from tensorflow.contrib.rnn.python.ops import core_rnn_cell_impl
 
 
@@ -14,7 +14,7 @@ def highway(input_, size, layer_size=1, bias=-2, f=tf.nn.relu):
     where g is nonlinearity, t is transform gate, and (1 - t) is carry gate.
     """
     output = input_
-    for idx in xrange(layer_size):
+    for idx in range(layer_size):
         with tf.variable_scope('output_lin_%d' % idx):
             output = f(core_rnn_cell_impl._linear(output, size, 0))
 

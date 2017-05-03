@@ -1,6 +1,5 @@
 import numpy as np
 from re import compile as _Re
-import cPickle
 
 
 def split_unicode_chrs(text):

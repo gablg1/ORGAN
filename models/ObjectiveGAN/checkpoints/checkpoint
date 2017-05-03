@@ -1,2 +1,0 @@
-model_checkpoint_path: "pretrain_ckpt"
-all_model_checkpoint_paths: "pretrain_ckpt"

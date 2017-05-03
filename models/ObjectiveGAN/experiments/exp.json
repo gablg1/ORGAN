@@ -1,0 +1,12 @@
+{
+    "EXP_NAME":"test",
+    "TRAIN_FILE":"../../data/subset_11.csv",
+    "D_WEIGHT" : 0.5,
+    "G_STEPS" : 1,
+    "SEED":88,
+    "G_PRETRAIN_STEPS":240,
+    "D_PRETRAIN_STEPS":50,
+    "TOTAL_BATCH":1,
+    "EXTRA_LENGTH":10,
+    "BATCH_SIZE":64
+}
