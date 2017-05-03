@@ -1,2 +1,0 @@
-Batch,test_loss,G_loss,D_loss_0,Accuracy_0,D_loss_1,Accuracy_1,mean_length,n_samples,uniq_samples,good_samples,bad_samples,diversity,novelty,model_samples
-0,8.82538700104,891.321899414,1.83187031746,0.967741906643,1.57771289349,0.93548387289,14.296875,64,64,10,54,1.0,0.9,samples_0
