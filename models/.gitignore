@@ -1,1 +1,5 @@
 *.pyc
+# tensorflow checkpoints
+*.index
+*.meta
+*.data*
