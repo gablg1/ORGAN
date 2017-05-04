@@ -4,9 +4,12 @@
     "D_WEIGHT" : 0.5,
     "G_STEPS" : 1,
     "SEED":88,
-    "G_PRETRAIN_STEPS":20,
-    "D_PRETRAIN_STEPS":5,
-    "TOTAL_BATCH":1,
+    "G_PRETRAIN_STEPS":240,
+    "D_PRETRAIN_STEPS":50,
+    "TOTAL_BATCH":3,
     "MAX_LENGTH":40,
-    "BATCH_SIZE":64
+    "BATCH_SIZE":64,
+    "LOAD_PRETRAIN":true,
+    "LOAD_PREV_SESS":true,
+    "EPOCH_SAVES":20
 }

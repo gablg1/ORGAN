@@ -71,7 +71,7 @@ class Dis_dataloader():
         """
         Generates a batch iterator for a dataset.
         """
-        data = np.array(data)
+        data = np.array(list(data))
         data_size = len(data)
         num_batches_per_epoch = int(len(data) / batch_size) + 1
         for epoch in range(num_epochs):

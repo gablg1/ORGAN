@@ -39,7 +39,7 @@ EMB_DIM = 32
 HIDDEN_DIM = 32
 START_TOKEN = 0
 SAMPLE_NUM = 6400
-BIG_SAMPLE_NUM = SAMPLE_NUM * 10
+BIG_SAMPLE_NUM = SAMPLE_NUM * 3
 D_WEIGHT = params['D_WEIGHT']
 
 D = max(int(5 * D_WEIGHT), 1)
@@ -180,6 +180,21 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
     return
 
 
+def save_results(sess, folder, name, results_rows=None):
+    if results_rows is not None:
+        df = pd.DataFrame(results_rows)
+        df.to_csv('{}_results.csv'.format(name), index=False)
+    # save models
+    model_saver = tf.train.Saver()
+    ckpt_dir = 'checkpoints/{}'.format(folder)
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
+    ckpt_file = os.path.join(ckpt_dir, '{}.ckpt'.format(name))
+    path = model_saver.save(sess, ckpt_file)
+    print('Model saved at {}'.format(path))
+    return
+
+
 def main():
     random.seed(SEED)
     np.random.seed(SEED)
@@ -252,19 +267,17 @@ def main():
     ckpt_dir = 'checkpoints/{}_pretrain'.format(PREFIX)
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
-    pretrain_ckpt_file = os.path.join(ckpt_dir, 'pretrain_ckpt')
-    if os.path.isfile(pretrain_ckpt_file + '.meta'):
-        saver.restore(sess, pretrain_ckpt_file)
-        print('Pretrain loaded from previous checkpoint {}'.format(
-            pretrain_ckpt_file))
+    ckpt_file = os.path.join(ckpt_dir, 'pretrain_ckpt')
+    if os.path.isfile(ckpt_file + '.meta') and params["LOAD_PRETRAIN"]:
+        saver.restore(sess, ckpt_file)
+        print('Pretrain loaded from previous checkpoint {}'.format(ckpt_file))
     else:
         sess.run(tf.global_variables_initializer())
         pretrain(sess, generator, target_lstm, train_discriminator)
-        path = saver.save(sess, pretrain_ckpt_file)
+        path = saver.save(sess, ckpt_file)
         print('Pretrain finished and saved at {}'.format(path))
 
     print('Testing pretrain model')
-    RESULTS_FILE = '{}_results.csv'.format(PREFIX)
     # create reward function
     batch_reward = make_reward(train_samples)
     # make some samples
@@ -320,25 +333,18 @@ def main():
             d_loss, accuracy = train_discriminator()
             results['D_loss_{}'.format(i)] = d_loss
             results['Accuracy_{}'.format(i)] = accuracy
-
+        print('results')
         # results
         mm.compute_results(gen_samples, train_samples, ord_dict, results)
         results_rows.append(results)
-        if nbatch % 20 == 0:
-            pd.DataFrame(results_rows).to_csv(RESULTS_FILE, index=False)
+        if nbatch % params["EPOCH_SAVES"] == 0:
+            save_results(sess, PREFIX, PREFIX+'_model', results_rows)
+
 
     # write results
-    pd.DataFrame(results_rows).to_csv(RESULTS_FILE, index=False)
-    # save models
-    model_saver = tf.train.Saver()
-    ckpt_dir = 'checkpoints/{}'.format(PREFIX)
-    if not os.path.exists(ckpt_dir):
-        os.makedirs(ckpt_dir)
-    ckpt_file = os.path.join(ckpt_dir, '{}_model.ckpt'.format(PREFIX))
-    path = model_saver.save(sess, ckpt_file)
-    print('Model saved at {}'.format(path))
-
-    print('\n*** FINISHED ***')
+    save_results(sess, PREFIX, PREFIX+'_model', results_rows)
+    
+    print('\n:*** FINISHED ***')
     return
 
 if __name__ == '__main__':

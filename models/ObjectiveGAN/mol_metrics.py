@@ -111,16 +111,17 @@ def print_params(p):
 
 def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=True):
     samples = [onehot_decode(s, ord_dict) for s in model_samples]
-    samples_lens = map(len, samples)
-    results['mean_length'] = np.mean(samples_lens)
+    results['mean_length'] = np.mean([len(sample) for sample in samples])
     results['n_samples'] = len(samples)
     results['uniq_samples'] = len(set(samples))
-    verified_samples = filter(verify_sequence, samples)
-    unverified_samples = filter(lambda v: not verify_sequence(v), samples)
+    verified_samples = [
+        sample for sample in samples if verify_sequence(sample)]
+    unverified_samples = [
+        sample for sample in samples if not verify_sequence(sample)]
     results['good_samples'] = len(verified_samples)
     results['bad_samples'] = len(unverified_samples)
     metrics = {'novelty': batch_novelty,
-               'hard novelty': batch_hardnovelty, 'diversity': batch_diversity}
+               'hard_novelty': batch_hardnovelty, 'diversity': batch_diversity}
     for key, func in metrics.items():
         results[key] = np.mean(func(verified_samples, train_samples))
 
@@ -147,7 +148,7 @@ def print_results(verified_samples, unverified_samples, results={}):
     percent = results['bad_samples'] / float(results['n_samples']) * 100
     print('Unverified  : {:6d} ({:2.2f}%)'.format(
         results['bad_samples'], percent))
-    for i in ['novelty', 'hardnovelty', 'diversity']:
+    for i in ['novelty', 'hard_novelty', 'diversity']:
         print('{:11s} : {:1.4f}'.format(i, results[i]))
 
     print('\nExample of good samples:')
@@ -199,12 +200,12 @@ def batch_hardnovelty(smiles, train_smiles):
 
 
 def novelty(smile, train_smiles):
-    newness = 1.0 if canon_smile not in train_smiles else 0.0
+    newness = 1.0 if smile not in train_smiles else 0.0
     return newness
 
 
 def hard_novelty(smile, train_smiles):
-    canon_smiles = MolToSmiles(MolFromSmiles(smile))
+    canon_smile = MolToSmiles(MolFromSmiles(smile))
     newness = 1.0 if canon_smile not in train_smiles else 0.0
     return newness
 
