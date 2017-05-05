@@ -104,13 +104,15 @@ def pad(sequence, n, pad_char = '_'):
     return sequence + [pad_char] * (n - len(sequence))
 
 def unpad(sequence, pad_char = '_'):
-    for i, elem in enumerate(sequence):
-        if elem == pad_char:
-            return sequence
+    def reverse(s): return s[::-1]
+    rev = reverse(sequence)
+    for i, elem in enumerate(rev):
+        if elem != pad_char:
+            return reverse(rev[i:])
     return sequence
 
 def encode_smile(sequence, max_len): return [char_dict[c] for c in pad(sequence, max_len)]
-def decode_smile(ords): return unpad(' '.join([ord_dict[o] for o in ords]))
+def decode_smile(ords): return ' '.join(unpad([ord_dict[o] for o in ords]))
 
 NUM_EMB = len(char_dict) + 1
 
