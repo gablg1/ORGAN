@@ -104,7 +104,7 @@ def pad(sequence, n, pad_char = '_'):
 def unpad(sequence, pad_char = '_'):
     for i, elem in enumerate(sequence):
         if elem == pad_char:
-            return sequence[:i]
+            return sequence
     return sequence
 
 def encode_smile(sequence, max_len): return [char_dict[c] for c in pad(sequence, max_len)]
@@ -127,8 +127,8 @@ def ratio_of_steps(sequence):
     notes_and_successors = [(note, clean_sequence[i+1]) for i, note in enumerate(clean_sequence) if i < len(clean_sequence) - 1]
 
     def is_step(note, succ): return abs(notes.index(note) - notes.index(succ)) == 1
+    print sequence
     return np.mean([(1 if is_step(note, successor) else 0) for note, successor in notes_and_successors]) if len(sequence) != 0 else 0
-
 
 def make_reward(train_smiles):
     def reward(decoded):
