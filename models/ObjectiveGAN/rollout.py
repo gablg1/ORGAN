@@ -82,13 +82,13 @@ class ROLLOUT(object):
             for given_num in range(1, self.sequence_length):
                 feed = {self.x: input_x, self.given_num: given_num}
                 outputs = sess.run([self.gen_x], feed)
-                generated_poem = outputs[0]  # batch_size x seq_length
-                feed = {cnn.input_x: generated_poem, cnn.dropout_keep_prob: 1.0}
+                generated_seqs = outputs[0]  # batch_size x seq_length
+                feed = {cnn.input_x: generated_seqs, cnn.dropout_keep_prob: 1.0}
                 ypred_for_auc = sess.run(cnn.ypred_for_auc, feed)
 
                 if reward_fn:
                     ypred = D_weight * np.array([item[1] for item in ypred_for_auc])
-                    ypred += reward_weight * reward_fn(generated_poem)
+                    ypred += reward_weight * reward_fn(generated_seqs)
                 else:
                     ypred = np.array([item[1] for item in ypred_for_auc])
 

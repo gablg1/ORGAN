@@ -39,7 +39,7 @@ EMB_DIM = 32
 HIDDEN_DIM = 32
 START_TOKEN = 0
 SAMPLE_NUM = 6400
-BIG_SAMPLE_NUM = SAMPLE_NUM * 3
+BIG_SAMPLE_NUM = SAMPLE_NUM * 5
 D_WEIGHT = params['D_WEIGHT']
 
 D = max(int(5 * D_WEIGHT), 1)
@@ -57,28 +57,23 @@ dis_l2_reg_lambda = 0.2
 
 #============= Objective ==============
 
+reward_func = mm.load_reward(params['OBJECTIVE'])
+
 
 def make_reward(train_samples):
-
-    def reward(decoded):
-        return mm.novelty(decoded, train_samples)
 
     def batch_reward(samples):
         decoded = [mm.onehot_decode(sample, ord_dict) for sample in samples]
         pct_unique = len(list(set(decoded))) / float(len(decoded))
-        rewards = np.array([reward(sample) for sample in decoded])
+        rewards = [reward_func(smile, train_samples) if mm.verify_sequence(
+            smile) else 0 for smile in decoded]
+
         weights = np.array([pct_unique / float(decoded.count(sample))
                             for sample in decoded])
 
         return rewards * weights
 
     return batch_reward
-
-
-# def objective(samples, train_samples=None):
-#    vals = [mm.novelty(sample, train_samples)
-#            for sample in samples if mm.verify_sequence(sample)]
-#    return np.mean(vals)
 
 #=======================================
 ##########################################################################
@@ -183,7 +178,7 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
 def save_results(sess, folder, name, results_rows=None):
     if results_rows is not None:
         df = pd.DataFrame(results_rows)
-        df.to_csv('{}_results.csv'.format(name), index=False)
+        df.to_csv('{}_results.csv'.format(folder), index=False)
     # save models
     model_saver = tf.train.Saver()
     ckpt_dir = 'checkpoints/{}'.format(folder)
@@ -338,12 +333,11 @@ def main():
         mm.compute_results(gen_samples, train_samples, ord_dict, results)
         results_rows.append(results)
         if nbatch % params["EPOCH_SAVES"] == 0:
-            save_results(sess, PREFIX, PREFIX+'_model', results_rows)
-
+            save_results(sess, PREFIX, PREFIX + '_model', results_rows)
 
     # write results
-    save_results(sess, PREFIX, PREFIX+'_model', results_rows)
-    
+    save_results(sess, PREFIX, PREFIX + '_model', results_rows)
+
     print('\n:*** FINISHED ***')
     return
 
