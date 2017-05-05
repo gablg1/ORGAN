@@ -55,6 +55,8 @@ DATA_DIR = "../../data"
 #smiles = io_utils.read_smiles_smi(os.path.join(DATA_DIR, '250k.smi'))
 sequences = io_utils.read_songs_txt(os.path.join(DATA_DIR, 'jigs.txt'))
 
+sequences = [seq for seq in sequences if len(seq) < 100]
+
 def pct(a, b):
     if len(b) == 0:
         return 0
