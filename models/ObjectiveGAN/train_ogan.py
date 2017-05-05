@@ -181,7 +181,7 @@ def save_results(sess, folder, name, results_rows=None):
         df.to_csv('{}_results.csv'.format(folder), index=False)
     # save models
     model_saver = tf.train.Saver()
-    ckpt_dir = 'checkpoints/{}'.format(folder)
+    ckpt_dir = os.path.join(params['CHK_PATH'], folder)
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
     ckpt_file = os.path.join(ckpt_dir, '{}.ckpt'.format(name))

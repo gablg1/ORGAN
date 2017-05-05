@@ -3,6 +3,7 @@
     "TRAIN_FILE":"../../data/toy.csv",
     "OBJECTIVE":"novelty",
     "D_WEIGHT" : 0.5,
+    "CHK_PATH" : "checkpoints",
     "G_STEPS" : 1,
     "SEED":88,
     "G_PRETRAIN_STEPS":240,
