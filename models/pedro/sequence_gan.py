@@ -62,27 +62,6 @@ def pct(a, b):
         return 0
     return float(len(a)) / len(b)
 
-def objective(samples, verify_fn, in_train_fn, max_len):
-    unique_samples = list(set(samples))
-    verified = filter(verify_fn, unique_samples)
-    in_train = filter(in_train_fn, verified)
-    return pct(verified, samples) * (1 - pct(in_train, verified))
-    #count_unique = [len(set(sample)) for sample in samples]
-    #return pct(verified, samples) * (1 - pct(in_train, verified)) * (np.mean(count_unique) / float(max_len))
-
-def print_molecules(model_samples, train_smiles):
-    samples = [decode_smile(s) for s in model_samples]
-    unique_samples = list(set(samples))
-    print 'Unique samples. Pct: {}'.format(pct(unique_samples, samples))
-    verified_samples = filter(verify_sequence, samples)
-
-    for s in samples[0:10]:
-        print s
-    print 'Verified samples. Pct: {}'.format(pct(verified_samples, samples))
-    for s in verified_samples[0:10]:
-        print s
-    print 'Objective: {}'.format(objective(samples, verify_sequence,
-        lambda x: x in train_smiles, SEQ_LENGTH))
 
 def build_vocab(sequences, pad_char = '_', start_char = '^'):
     i = 1
@@ -119,25 +98,83 @@ NUM_EMB = len(char_dict) + 1
 def verify_sequence(decoded):
     return True
 
-def ratio_of_steps(sequence):
-    notes = ['C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
+
+
+notes = ['C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
     'c', 'd', 'e', 'f', 'g', 'a', 'b', 'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'']
 
-    def clean(note): return note.strip("_^=\\0123456789")
+notes_and_frequencies = {'C,' : 65.41, 'D,' : 73.42, 'E,' : 82.41, 'F,' : 87.31, 'G,' : 98, 'A,' : 110, 'B,' : 123.47, 
+    'C' : 130.81, 'D' : 146.83, 'E' : 164.81, 'F' : 174.61, 'G' : 196, 'A' : 220, 'B' : 246.94,
+    'c' : 261.63, 'd' : 293.66, 'e' : 329.63, 'f' : 349.23, 'g' : 392, 'a' : 440, 'b' : 493.88,
+    'c\'' : 523.25, 'd\'' : 587.33, 'e\'' : 659.25, 'f\'' : 698.46, 'g\'' : 783.99, 'a\'' : 880, 'b\'' : 987.77}
 
-    def is_note(note): return clean(note) in notes
-    clean_sequence = [clean(note) for note in sequence if is_note(note)]
+def is_note(note): return note in notes
 
-    notes_and_successors = [(note, clean_sequence[i+1]) for i, note in enumerate(clean_sequence) if i < len(clean_sequence) - 1]
+def is_valid_sequence(sequence):
+    clean_sequence = clean(sequence)
+    return np.sum([(1 if is_note(note) else 0) for note in clean_sequence]) > 1 if len(sequence) != 0 else False
+
+def clean(sequence): 
+    return [note.strip("_^=\\0123456789") for note in sequence if is_note(note.strip("_^=\\0123456789"))]
+
+def notes_and_successors(sequence): return [(note, sequence[i+1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
+
+def is_perf_fifth(note, succ): 
+        ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
+        return ratio < 1.55 and ratio > 1.45
+
+
+
+def tonality(sequence):
+    clean_sequence = clean(sequence)
+
+    notes_and_succs = notes_and_successors(clean_sequence)
+
+    return np.mean([(1 if is_perf_fifth(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
+
+
+
+# Order of dissonance (best to worst): P5, P4, M6, M3, m3, m6, M2, m7, m2, M7, TT
+# To be melodic, it must be a M6 or better
+def melodicity(sequence):
+    clean_sequence = clean(sequence)
+
+    notes_and_succs = notes_and_successors(clean_sequence)
+
+    def is_perf_fourth(note, succ):
+        ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
+        return ratio < 1.38 and ratio > 1.28
+
+    def is_major_sixth(note, succ):
+        ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
+        return ratio < 1.72 and ratio > 1.62
+
+    def is_harmonic(note, succ): 
+        ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
+        return is_perf_fifth(note, succ) or is_perf_fourth(note, succ) or is_major_sixth(note, succ)
+
+    return np.mean([(1 if is_harmonic(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
+
+
+
+def ratio_of_steps(sequence):
+    clean_sequence = clean(sequence)
+
+    notes_and_succs = notes_and_successors(clean_sequence)
 
     def is_step(note, succ): return abs(notes.index(note) - notes.index(succ)) == 1
-    print sequence
-    return np.mean([(1 if is_step(note, successor) else 0) for note, successor in notes_and_successors]) if len(sequence) != 0 else 0
+
+    return np.mean([(1 if is_step(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
+
+
+
+def reward(decoded):
+    if is_valid_sequence(decoded):
+        return melodicity(decoded)
+    else:
+        return 0
 
 def make_reward(train_smiles):
-    def reward(decoded):
-        return ratio_of_steps(decoded)
-
     def batch_reward(samples):
         decoded = [decode_smile(sample) for sample in samples]
         pct_unique = float(len(list(set(decoded)))) / len(decoded)
@@ -149,9 +186,27 @@ def make_reward(train_smiles):
                     ret += 1
             return ret
 
-
         return np.array([reward(sample) / count(sample, decoded) for sample in decoded])
     return batch_reward
+
+def objective(samples):
+    return np.mean([reward(sample) for sample in samples])
+    
+    #count_unique = [len(set(sample)) for sample in samples]
+    #return pct(verified, samples) * (1 - pct(in_train, verified)) * (np.mean(count_unique) / float(max_len))
+
+def print_molecules(model_samples, train_smiles):
+    samples = [decode_smile(s) for s in model_samples]
+    unique_samples = list(set(samples))
+    print 'Unique samples. Pct: {}'.format(pct(unique_samples, samples))
+    verified_samples = filter(verify_sequence, samples)
+
+    for s in samples[0:10]:
+        print s
+    print 'Verified samples. Pct: {}'.format(pct(verified_samples, samples))
+    for s in verified_samples[0:10]:
+        print s
+    print 'Objective: {}'.format(objective(samples))
 
 SEQ_LENGTH = max(map(len, sequences))
 
