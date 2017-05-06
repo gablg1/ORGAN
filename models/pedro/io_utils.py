@@ -30,6 +30,7 @@ def read_songs_txt(filename):
             if line[0] == 'X':
                 data.append(song)
                 song = []
+                continue
             for c in line:
                 if c in ignore_chars:
                     continue
