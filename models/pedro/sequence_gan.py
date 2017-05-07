@@ -24,7 +24,7 @@ TRAIN_ITER = 1  # generator
 SEED = 88
 BATCH_SIZE = 64
 
-D_WEIGHT = 0.5
+D_WEIGHT = 1
 
 D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################################
@@ -56,6 +56,8 @@ DATA_DIR = "../../data"
 sequences = io_utils.read_songs_txt(os.path.join(DATA_DIR, 'jigs.txt'))
 
 sequences = [seq for seq in sequences if len(seq) < 100]
+print "Average equence length:"
+print (np.average([len(seq) for seq in sequences]))
 
 def pct(a, b):
     if len(b) == 0:
@@ -207,6 +209,8 @@ def print_molecules(model_samples, train_smiles):
     for s in verified_samples[0:10]:
         print s
     print 'Objective: {}'.format(objective(samples))
+    print "Average sample length"
+    print (np.average([len(unpad(seq)) for seq in model_samples]))
 
 SEQ_LENGTH = max(map(len, sequences))
 
