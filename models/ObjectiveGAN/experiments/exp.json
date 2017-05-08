@@ -1,6 +1,7 @@
 {
     "EXP_NAME":"test",
     "TRAIN_FILE":"../../data/subset_11.csv",
+    "METRICS_FILE":"mol_metrics",
     "D_WEIGHT" : 0.5,
     "G_STEPS" : 1,
     "SEED":88,

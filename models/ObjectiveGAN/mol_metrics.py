@@ -56,11 +56,11 @@ def pad(smile, n, pad_char='_'):
 def unpad(smile, pad_char='_'): return smile.rstrip(pad_char)
 
 
-def onehot_encode(smile, max_len, char_dict): return [
+def encode(smile, max_len, char_dict): return [
     char_dict[c] for c in pad(smile, max_len)]
 
 
-def onehot_decode(ords, ord_dict): return unpad(
+def decode(ords, ord_dict): return unpad(
     ''.join([ord_dict[o] for o in ords]))
 
 
@@ -110,7 +110,7 @@ def print_params(p):
 
 
 def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=True):
-    samples = [onehot_decode(s, ord_dict) for s in model_samples]
+    samples = [decode(s, ord_dict) for s in model_samples]
     results['mean_length'] = np.mean([len(sample) for sample in samples])
     results['n_samples'] = len(samples)
     results['uniq_samples'] = len(set(samples))

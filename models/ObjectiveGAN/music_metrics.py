@@ -26,9 +26,10 @@ def build_vocab(sequences, pad_char = '_', start_char = '^'):
                 ord_dict[i] = c
                 i += 1
     char_dict[pad_char], ord_dict[i] = i, pad_char
-    return char_dict, ord_dict
 
-char_dict, ord_dict = build_vocab(sequences)
+    # FIXME: For some reason the tensorflow embedding size expects a number of tokens one more
+    char_dict['hi'], ord_dict[i+1] = i+1, 'hi'
+    return char_dict, ord_dict
 
 def pad(sequence, n, pad_char = '_'):
     if n < len(sequence):
@@ -43,8 +44,8 @@ def unpad(sequence, pad_char = '_'):
             return reverse(rev[i:])
     return sequence
 
-def encode_smile(sequence, max_len): return [char_dict[c] for c in pad(sequence, max_len)]
-def decode_smile(ords): return ' '.join(unpad([ord_dict[o] for o in ords]))
+def encode(sequence, max_len, char_dict): return [char_dict[c] for c in pad(sequence, max_len)]
+def decode(ords, ord_dict): return ' '.join(unpad([ord_dict[o] for o in ords]))
 
 notes = ['C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
     'c', 'd', 'e', 'f', 'g', 'a', 'b', 'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'']
@@ -56,7 +57,7 @@ notes_and_frequencies = {'C,' : 65.41, 'D,' : 73.42, 'E,' : 82.41, 'F,' : 87.31,
 
 def is_note(note): return note in notes
 
-def is_valid_sequence(sequence):
+def verify_sequence(sequence):
     clean_sequence = clean(sequence)
     return np.sum([(1 if is_note(note) else 0) for note in clean_sequence]) > 1 if len(sequence) != 0 else False
 
@@ -69,26 +70,24 @@ def is_perf_fifth(note, succ):
         ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
         return ratio < 1.55 and ratio > 1.45
 
-def batch_tonality(sequence):
-    vals = [tonality(sequence) if is_valid_sequence(sequence)
-    else 0 for note in sequence]
-    return np.mean(vals)
 
-def tonality(sequence):
+def tonality(sequence, train_data):
+    if not verify_sequence(sequence):
+        return 0
     clean_sequence = clean(sequence)
 
     notes_and_succs = notes_and_successors(clean_sequence)
 
     return np.mean([(1 if is_perf_fifth(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
 
-def batch_melodicty(sequence):
-    vals = [melodicty(sequence) if is_valid_sequence(sequence)
-    else 0 for note in sequence]
-    return np.mean(vals)
+def batch(fn):
+    return lambda seqs, data: np.mean([fn(seq, data) for seq in seqs])
 
 # Order of dissonance (best to worst): P5, P4, M6, M3, m3, m6, M2, m7, m2, M7, TT
 # To be melodic, it must be a M6 or better
-def melodicity(sequence):
+def melodicity(sequence, train_data):
+    if not verify_sequence(sequence):
+        return 0
     clean_sequence = clean(sequence)
 
     notes_and_succs = notes_and_successors(clean_sequence)
@@ -107,12 +106,10 @@ def melodicity(sequence):
 
     return np.mean([(1 if is_harmonic(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
 
-def batch_ratio_of_steps(sequence):
-    vals = [ratio_of_steps(sequence) if is_valid_sequence(sequence)
-    else 0 for note in sequence]
-    return np.mean(vals)
 
-def ratio_of_steps(sequence):
+def ratio_of_steps(sequence, train_data):
+    if not verify_sequence(sequence):
+        return 0
     clean_sequence = clean(sequence)
 
     notes_and_succs = notes_and_successors(clean_sequence)
@@ -121,7 +118,7 @@ def ratio_of_steps(sequence):
 
     return np.mean([(1 if is_step(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
 
-def read_songs_txt(filename):
+def load_train_data(filename):
     with open(filename, 'rU') as file:
         data = []
         line = file.readline()
@@ -204,15 +201,49 @@ def load_reward(objective):
         raise ValueError('objective not found!')
     return
 
-def print_music(model_samples, train_smiles):
-    samples = [decode_smile(s) for s in model_samples]
-    unique_samples = list(set(samples))
-    print 'Unique samples. Pct: {}'.format(pct(unique_samples, samples))
-    verified_samples = filter(verify_sequence, samples)
+def print_params(p):
+    print('Using parameters:')
+    for key, value in p.items():
+        print('{:20s} - {:12}'.format(key, value))
+    print('rest of parameters are set as default\n')
+    return
 
+def verified_and_below(seq, max_len):
+    return len(seq) < max_len and verify_sequence(seq)
+
+def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=True):
+    samples = [decode(s, ord_dict) for s in model_samples]
+    results['mean_length'] = np.mean([len(sample) for sample in samples])
+    results['n_samples'] = len(samples)
+    results['uniq_samples'] = len(set(samples))
+    metrics = {'ratio_of_steps': batch(ratio_of_steps),
+               'melodicity': batch(melodicity),
+               'tonality': batch(tonality)}
+    for key, func in metrics.items():
+        results[key] = np.mean(func(samples, train_samples))
+
+    # FIXME: Need to save the ABC file
+    #if 'Batch' in results.keys():
+    #    smi_name = '{}_{}'.format(results['exp_name'], results['Batch'])
+     #   save_smi(smi_name, samples)
+     #   results['model_samples'] = smi_name
+    # print results
+    if verbose:
+        print_results(samples, metrics.keys(), results)
+    return
+
+
+def print_results(samples, metrics, results={}):
+    print('~~~ Summary Results ~~~')
+    print('Total samples: {}'.format(results['n_samples']))
+    percent = results['uniq_samples'] / float(results['n_samples']) * 100
+    print('Unique      : {:6d} ({:2.2f}%)'.format(
+        results['uniq_samples'], percent))
+    for i in metrics:
+        print('{:11s} : {:1.4f}'.format(i, results[i]))
+
+    print('\nSamples:')
     for s in samples[0:10]:
-        print s
-    print 'Verified samples. Pct: {}'.format(pct(verified_samples, samples))
-    for s in verified_samples[0:10]:
-        print s
-    print 'Objective: {}'.format(objective(samples))
+        print('' + s)
+
+    return
