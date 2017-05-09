@@ -211,6 +211,16 @@ def print_params(p):
 def verified_and_below(seq, max_len):
     return len(seq) < max_len and verify_sequence(seq)
 
+
+def save_abc(name, smiles):
+    folder = 'songs'
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    smi_file = os.path.join(folder, name + ".abc")
+    with open(smi_file, 'w') as afile:
+        afile.write('\n'.join(smiles))
+    return
+
 def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=True):
     samples = [decode(s, ord_dict) for s in model_samples]
     results['mean_length'] = np.mean([len(sample) for sample in samples])
@@ -222,12 +232,10 @@ def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=
     for key, func in metrics.items():
         results[key] = np.mean(func(samples, train_samples))
 
-    # FIXME: Need to save the ABC file
-    #if 'Batch' in results.keys():
-    #    smi_name = '{}_{}'.format(results['exp_name'], results['Batch'])
-     #   save_smi(smi_name, samples)
-     #   results['model_samples'] = smi_name
-    # print results
+    if 'Batch' in results.keys():
+        file_name = '{}_{}'.format(results['exp_name'], results['Batch'])
+        save_abc(file_name, samples)
+        results['model_samples'] = file_name
     if verbose:
         print_results(samples, metrics.keys(), results)
     return
