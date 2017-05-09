@@ -229,7 +229,7 @@ def verified_and_below(seq, max_len):
 
 
 def save_abc(name, smiles):
-    folder = 'songs'
+    folder = 'epoch_data'
     if not os.path.exists(folder):
         os.makedirs(folder)
     smi_file = os.path.join(folder, name + ".abc")

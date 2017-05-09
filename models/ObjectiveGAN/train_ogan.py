@@ -97,8 +97,10 @@ char_dict, ord_dict = mm.build_vocab(train_samples)
 NUM_EMB = len(char_dict)
 DATA_LENGTH = max(map(len, train_samples))
 MAX_LENGTH = params["MAX_LENGTH"]
-to_use = [sample for sample in train_samples if mm.verified_and_below(sample, MAX_LENGTH)]
-positive_samples = [mm.encode(sample, MAX_LENGTH, char_dict) for sample in to_use]
+to_use = [sample for sample in train_samples if mm.verified_and_below(
+    sample, MAX_LENGTH)]
+positive_samples = [mm.encode(sample, MAX_LENGTH, char_dict)
+                    for sample in to_use]
 POSITIVE_NUM = len(positive_samples)
 print('Starting ObjectiveGAN for {:7s}'.format(PREFIX))
 print('Data points in train_file {:7d}'.format(len(train_samples)))
@@ -332,13 +334,11 @@ def main():
                 sess, samples, 16, cnn, batch_reward, D_WEIGHT)
             print('Rewards be like...')
             print(rewards)
-            g_loss = generator.generator_step(sess, samples, rewards)
+            nll = generator.generator_step(sess, samples, rewards)
 
-            print('G_loss: {}'.format(g_loss))
-            results['G_loss'] = g_loss
-
+            print('neg-loglike: {}'.format(nll))
+            results['neg-loglike'] = nll
         rollout.update_params()
-
 
         # generate for discriminator
         print('-> Training Discriminator')

@@ -85,9 +85,9 @@ def read_smiles_csv(filename):
 
 
 def save_smi(name, smiles):
-    if not os.path.exists('smiles'):
-        os.makedirs('smiles')
-    smi_file = os.path.join('smiles', name + ".smi")
+    if not os.path.exists('epoch_data'):
+        os.makedirs('epoch_data')
+    smi_file = os.path.join('epoch_data', "{}.smi".format(name))
     with open(smi_file, 'w') as afile:
         afile.write('\n'.join(smiles))
     return
@@ -167,7 +167,6 @@ def print_results(verified_samples, unverified_samples, metrics, results={}):
 #====== diversity metric
 
 
-
 def batch_diversity(smiles, train_smiles):
     return diversity(smiles, train_smiles)
 
@@ -200,6 +199,7 @@ def batch_novelty(smiles, train_smiles):
     vals = [novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
     return np.mean(vals)
+
 
 def batch_hardnovelty(smiles, train_smiles):
     vals = [hard_novelty(smile, train_smiles) if verify_sequence(
