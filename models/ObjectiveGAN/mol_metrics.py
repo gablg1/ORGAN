@@ -167,6 +167,7 @@ def print_results(verified_samples, unverified_samples, metrics, results={}):
 #====== diversity metric
 
 
+
 def batch_diversity(smiles, train_smiles):
     return diversity(smiles, train_smiles)
 

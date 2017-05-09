@@ -1,14 +1,6 @@
 import os
-import model
 import numpy as np
-import tensorflow as tf
-import random
-import time
-from gen_dataloader import Gen_Data_loader
-from dis_dataloader import Dis_dataloader
-from rollout import ROLLOUT
-from target_lstm import TARGET_LSTM
-import cPickle
+
 
 def pct(a, b):
     if len(b) == 0:
@@ -16,7 +8,7 @@ def pct(a, b):
     return float(len(a)) / len(b)
 
 
-def build_vocab(sequences, pad_char = '_', start_char = '^'):
+def build_vocab(sequences, pad_char='_', start_char='^'):
     i = 1
     char_dict, ord_dict = {start_char: 0}, {0: start_char}
     for sequence in sequences:
@@ -27,16 +19,19 @@ def build_vocab(sequences, pad_char = '_', start_char = '^'):
                 i += 1
     char_dict[pad_char], ord_dict[i] = i, pad_char
 
-    # FIXME: For some reason the tensorflow embedding size expects a number of tokens one more
-    char_dict['hi'], ord_dict[i+1] = i+1, 'hi'
+    # FIXME: For some reason the tensorflow embedding size expects a number of
+    # tokens one more
+    char_dict['hi'], ord_dict[i + 1] = i + 1, 'hi'
     return char_dict, ord_dict
 
-def pad(sequence, n, pad_char = '_'):
+
+def pad(sequence, n, pad_char='_'):
     if n < len(sequence):
         return sequence
     return sequence + [pad_char] * (n - len(sequence))
 
-def unpad(sequence, pad_char = '_'):
+
+def unpad(sequence, pad_char='_'):
     def reverse(s): return s[::-1]
     rev = reverse(sequence)
     for i, elem in enumerate(rev):
@@ -44,31 +39,41 @@ def unpad(sequence, pad_char = '_'):
             return reverse(rev[i:])
     return sequence
 
-def encode(sequence, max_len, char_dict): return [char_dict[c] for c in pad(sequence, max_len)]
+
+def encode(sequence, max_len, char_dict): return [
+    char_dict[c] for c in pad(sequence, max_len)]
+
+
 def decode(ords, ord_dict): return ' '.join(unpad([ord_dict[o] for o in ords]))
 
 notes = ['C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
-    'c', 'd', 'e', 'f', 'g', 'a', 'b', 'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'']
+         'c', 'd', 'e', 'f', 'g', 'a', 'b', 'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'']
 
-notes_and_frequencies = {'C,' : 65.41, 'D,' : 73.42, 'E,' : 82.41, 'F,' : 87.31, 'G,' : 98, 'A,' : 110, 'B,' : 123.47, 
-    'C' : 130.81, 'D' : 146.83, 'E' : 164.81, 'F' : 174.61, 'G' : 196, 'A' : 220, 'B' : 246.94,
-    'c' : 261.63, 'd' : 293.66, 'e' : 329.63, 'f' : 349.23, 'g' : 392, 'a' : 440, 'b' : 493.88,
-    'c\'' : 523.25, 'd\'' : 587.33, 'e\'' : 659.25, 'f\'' : 698.46, 'g\'' : 783.99, 'a\'' : 880, 'b\'' : 987.77}
+notes_and_frequencies = {'C,': 65.41, 'D,': 73.42, 'E,': 82.41, 'F,': 87.31, 'G,': 98, 'A,': 110, 'B,': 123.47,
+                         'C': 130.81, 'D': 146.83, 'E': 164.81, 'F': 174.61, 'G': 196, 'A': 220, 'B': 246.94,
+                         'c': 261.63, 'd': 293.66, 'e': 329.63, 'f': 349.23, 'g': 392, 'a': 440, 'b': 493.88,
+                         'c\'': 523.25, 'd\'': 587.33, 'e\'': 659.25, 'f\'': 698.46, 'g\'': 783.99, 'a\'': 880, 'b\'': 987.77}
+
 
 def is_note(note): return note in notes
+
 
 def verify_sequence(sequence):
     clean_sequence = clean(sequence)
     return np.sum([(1 if is_note(note) else 0) for note in clean_sequence]) > 1 if len(sequence) != 0 else False
 
-def clean(sequence): 
+
+def clean(sequence):
     return [note.strip("_^=\\0123456789") for note in sequence if is_note(note.strip("_^=\\0123456789"))]
 
-def notes_and_successors(sequence): return [(note, sequence[i+1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
 
-def is_perf_fifth(note, succ): 
-        ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
-        return ratio < 1.55 and ratio > 1.45
+def notes_and_successors(sequence): return [(note, sequence[
+    i + 1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
+
+
+def is_perf_fifth(note, succ):
+    ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
+    return ratio < 1.55 and ratio > 1.45
 
 
 def tonality(sequence, train_data):
@@ -80,11 +85,14 @@ def tonality(sequence, train_data):
 
     return np.mean([(1 if is_perf_fifth(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
 
+
 def batch(fn):
     return lambda seqs, data: np.mean([fn(seq, data) for seq in seqs])
 
 # Order of dissonance (best to worst): P5, P4, M6, M3, m3, m6, M2, m7, m2, M7, TT
 # To be melodic, it must be a M6 or better
+
+
 def melodicity(sequence, train_data):
     if not verify_sequence(sequence):
         return 0
@@ -100,7 +108,7 @@ def melodicity(sequence, train_data):
         ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
         return ratio < 1.72 and ratio > 1.62
 
-    def is_harmonic(note, succ): 
+    def is_harmonic(note, succ):
         ratio = notes_and_frequencies[succ] / notes_and_frequencies[note]
         return is_perf_fifth(note, succ) or is_perf_fourth(note, succ) or is_major_sixth(note, succ)
 
@@ -114,16 +122,20 @@ def ratio_of_steps(sequence, train_data):
 
     notes_and_succs = notes_and_successors(clean_sequence)
 
-    def is_step(note, succ): return abs(notes.index(note) - notes.index(succ)) == 1
+    def is_step(note, succ): return abs(
+        notes.index(note) - notes.index(succ)) == 1
 
     return np.mean([(1 if is_step(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
+
 
 def load_train_data(filename):
     with open(filename, 'rU') as file:
         data = []
         line = file.readline()
-        ignore_chars = {'T', '%', 'S', 'M', 'K', 'P', 'L', '\"', '\n', ' ', '(', ')', 'm', '-', '\\', '!', 't', 'r', 'i', 'l', 'z', '[', '+', 'n', 'o', '#'}
-        notes = {'C', 'D', 'E', 'F', 'G', 'A', 'B', 'c', 'd', 'e', 'f', 'g', 'a', 'b'}
+        ignore_chars = {'T', '%', 'S', 'M', 'K', 'P', 'L', '\"', '\n', ' ',
+                        '(', ')', 'm', '-', '\\', '!', 't', 'r', 'i', 'l', 'z', '[', '+', 'n', 'o', '#'}
+        notes = {'C', 'D', 'E', 'F', 'G', 'A',
+                 'B', 'c', 'd', 'e', 'f', 'g', 'a', 'b'}
         prev_string = ""
         same_note = False
         on_bar = False
@@ -166,7 +178,8 @@ def load_train_data(filename):
                     prev_string = c
                 # likely to indicate length
                 elif c.isdigit():
-                    # if in the same note, the num closes it up by indicating length - indicate end of note
+                    # if in the same note, the num closes it up by indicating
+                    # length - indicate end of note
                     if same_note:
                         song.append(prev_string + c)
                         prev_string = ""
@@ -177,7 +190,7 @@ def load_train_data(filename):
                         song.append(prev_string)
                         prev_string = ""
                     if on_bar:
-                        song.append(prev_string + c) 
+                        song.append(prev_string + c)
                         prev_string = ""
                         on_bar = False
                     else:
@@ -188,6 +201,7 @@ def load_train_data(filename):
                 else:
                     prev_string += c
     return data
+
 
 def load_reward(objective):
 
@@ -201,12 +215,14 @@ def load_reward(objective):
         raise ValueError('objective not found!')
     return
 
+
 def print_params(p):
     print('Using parameters:')
     for key, value in p.items():
         print('{:20s} - {:12}'.format(key, value))
     print('rest of parameters are set as default\n')
     return
+
 
 def verified_and_below(seq, max_len):
     return len(seq) < max_len and verify_sequence(seq)
@@ -220,6 +236,7 @@ def save_abc(name, smiles):
     with open(smi_file, 'w') as afile:
         afile.write('\n'.join(smiles))
     return
+
 
 def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=True):
     samples = [decode(s, ord_dict) for s in model_samples]
