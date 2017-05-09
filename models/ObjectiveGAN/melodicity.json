@@ -8,7 +8,7 @@
     "SEED":88,
     "G_PRETRAIN_STEPS":240,
     "D_PRETRAIN_STEPS":50,
-    "TOTAL_BATCH":50,
+    "TOTAL_BATCH":100,
     "MAX_LENGTH":80,
     "BATCH_SIZE":64,
     "LOAD_PRETRAIN":true,
