@@ -1,6 +1,7 @@
 {
     "EXP_NAME":"test",
     "TRAIN_FILE":"../../data/toy.csv",
+    "METRICS_FILE":"mol_metrics",
     "OBJECTIVE":"novelty",
     "D_WEIGHT" : 0.5,
     "CHK_PATH" : "checkpoints",

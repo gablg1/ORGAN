@@ -16,7 +16,7 @@ def read_songs_txt(filename):
     with open(filename, 'rU') as file:
         data = []
         line = file.readline()
-        ignore_chars = {'T', '%', 'S', 'M', 'K', 'P', '\"', '\n', ' ', '(', ')', 'm', '-', '\\', '!', 't', 'r', 'i', 'l', 'z', '[', '+', 'n', 'o', '#'}
+        ignore_chars = {'T', '%', 'S', 'M', 'K', 'P', 'L', '\"', '\n', ' ', '(', ')', 'm', '-', '\\', '!', 't', 'r', 'i', 'l', 'z', '[', '+', 'n', 'o', '#'}
         notes = {'C', 'D', 'E', 'F', 'G', 'A', 'B', 'c', 'd', 'e', 'f', 'g', 'a', 'b'}
         prev_string = ""
         same_note = False
@@ -30,6 +30,7 @@ def read_songs_txt(filename):
             if line[0] == 'X':
                 data.append(song)
                 song = []
+                continue
             for c in line:
                 if c in ignore_chars:
                     continue

@@ -15,13 +15,28 @@ from rollout import ROLLOUT
 from target_lstm import TARGET_LSTM
 # import io_utils
 import pandas as pd
-import mol_metrics as mm
+import mol_metrics
+import music_metrics
+import sys
 
-PARAM_FILE = 'exp.json'
+
+if len(sys.argv) == 2:
+    PARAM_FILE = sys.argv[1]
+else:
+    PARAM_FILE = 'exp.json'
 params = json.loads(open(PARAM_FILE).read(), object_pairs_hook=OrderedDict)
 ##########################################################################
 #  Training  Hyper-parameters
 ##########################################################################
+
+# Load metrics file
+if params['METRICS_FILE'] == 'mol_metrics':
+    mm = mol_metrics
+elif params['METRICS_FILE'] == 'music_metrics':
+    mm = music_metrics
+else:
+    raise ValueError('Metrics file unknown!')
+
 PREFIX = params['EXP_NAME']
 PRE_EPOCH_NUM = params['G_PRETRAIN_STEPS']
 TRAIN_ITER = params['G_STEPS']  # generator
@@ -63,7 +78,7 @@ reward_func = mm.load_reward(params['OBJECTIVE'])
 def make_reward(train_samples):
 
     def batch_reward(samples):
-        decoded = [mm.onehot_decode(sample, ord_dict) for sample in samples]
+        decoded = [mm.decode(sample, ord_dict) for sample in samples]
         pct_unique = len(list(set(decoded))) / float(len(decoded))
         rewards = [reward_func(smile, train_samples) if mm.verify_sequence(
             smile) else 0 for smile in decoded]
@@ -82,13 +97,14 @@ char_dict, ord_dict = mm.build_vocab(train_samples)
 NUM_EMB = len(char_dict)
 DATA_LENGTH = max(map(len, train_samples))
 MAX_LENGTH = params["MAX_LENGTH"]
-positive_samples = [mm.onehot_encode(sample, MAX_LENGTH, char_dict)
-                    for sample in train_samples if mm.verified_and_below(sample, MAX_LENGTH)]
+to_use = [sample for sample in train_samples if mm.verified_and_below(sample, MAX_LENGTH)]
+positive_samples = [mm.encode(sample, MAX_LENGTH, char_dict) for sample in to_use]
 POSITIVE_NUM = len(positive_samples)
 print('Starting ObjectiveGAN for {:7s}'.format(PREFIX))
 print('Data points in train_file {:7d}'.format(len(train_samples)))
 print('Max data length is        {:7d}'.format(DATA_LENGTH))
 print('Max length to use is      {:7d}'.format(MAX_LENGTH))
+print('Avg length to use is      {:7f}'.format(np.mean(map(len, to_use))))
 print('Num valid data points is  {:7d}'.format(POSITIVE_NUM))
 print('Size of alphabet is       {:7d}'.format(NUM_EMB))
 
@@ -148,17 +164,19 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
     # samples = generate_samples(sess, target_lstm, BATCH_SIZE, generated_num)
     gen_data_loader = Gen_Data_loader(BATCH_SIZE)
     gen_data_loader.create_batches(positive_samples)
+    results = OrderedDict({'exp_name': PREFIX})
 
     #  pre-train generator
     print('Start pre-training...')
     for epoch in range(PRE_EPOCH_NUM):
         print('pre-train epoch:', epoch)
         loss = pre_train_epoch(sess, generator, gen_data_loader)
-        if epoch % 5 == 0:
+        if epoch == 10 or epoch % 40 == 0:
             samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(samples)
             test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
             print('\t test_loss {}, train_loss {}'.format(test_loss, loss))
+            mm.compute_results(samples, train_samples, ord_dict, results)
 
     samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
     likelihood_data_loader.create_batches(samples)
@@ -272,11 +290,8 @@ def main():
         path = saver.save(sess, ckpt_file)
         print('Pretrain finished and saved at {}'.format(path))
 
-    print('Testing pretrain model')
     # create reward function
     batch_reward = make_reward(train_samples)
-    # make some samples
-    samples = generate_samples(sess, generator, BATCH_SIZE, BIG_SAMPLE_NUM)
 
     rollout = ROLLOUT(generator, 0.8)
 
@@ -304,6 +319,9 @@ def main():
                 best_score = test_loss
                 print('best score: %f' % test_loss)
 
+            # results
+            mm.compute_results(gen_samples, train_samples, ord_dict, results)
+
         print('#########################################################################')
         print('-> Training generator with RL.')
         print('G Epoch {}'.format(nbatch))
@@ -321,6 +339,7 @@ def main():
 
         rollout.update_params()
 
+
         # generate for discriminator
         print('-> Training Discriminator')
         for i in range(D):
@@ -329,8 +348,6 @@ def main():
             results['D_loss_{}'.format(i)] = d_loss
             results['Accuracy_{}'.format(i)] = accuracy
         print('results')
-        # results
-        mm.compute_results(gen_samples, train_samples, ord_dict, results)
         results_rows.append(results)
         if nbatch % params["EPOCH_SAVES"] == 0:
             save_results(sess, PREFIX, PREFIX + '_model', results_rows)
