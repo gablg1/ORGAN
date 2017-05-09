@@ -250,7 +250,7 @@ def main():
 
     def train_discriminator():
         if D_WEIGHT == 0:
-            return
+            return 0, 0
 
         negative_samples = generate_samples(
             sess, generator, BATCH_SIZE, POSITIVE_NUM)

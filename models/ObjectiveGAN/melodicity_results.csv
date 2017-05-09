@@ -1,0 +1,2 @@
+exp_name,Batch,test_loss,mean_length,n_samples,uniq_samples,ratio_of_steps,melodicity,tonality,G_loss,D_loss_0,Accuracy_0,D_loss_1,Accuracy_1,D_loss_2,Accuracy_2,D_loss_3,Accuracy_3,D_loss_4,Accuracy_4
+melodicity,0,8.48054599762,103.81065625,32000,31059,0.252981695669,0.102311743895,0.051649609999,9.53042888641,1.87159633636,1.0,1.899310112,1.0,1.83637702465,1.0,1.82444381714,1.0,1.80790531635,1.0
