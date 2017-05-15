@@ -76,7 +76,8 @@ def verified_and_below(smile, max_len):
 
 
 def verify_sequence(smile):
-    return smile != '' and Chem.MolFromSmiles(smile) is not None
+    mol = Chem.MolFromSmiles(smile)
+    return smile != '' and mol is not None and mol.GetNumAtoms() > 1
 
 
 def build_vocab(smiles, pad_char='_', start_char='^'):
@@ -228,11 +229,13 @@ def batch_diversity(smiles, train_smiles):
     rand_mols = [Chem.MolFromSmiles(s) for s in rand_smiles]
     fps = [Chem.GetMorganFingerprintAsBitVect(
         m, 4, nBits=2048) for m in rand_mols]
-    vals = [diversity(smile, fps) for smile in smiles]
+    vals = [diversity(s, fps) if verify_sequence(s)
+            else 0.0 for s in smiles]
     return vals
 
 
 def diversity(smile, fps):
+    val = 0.0
     low_rand_dst = 0.9
     mean_div_dst = 0.945
     ref_mol = Chem.MolFromSmiles(smile)
@@ -243,14 +246,6 @@ def diversity(smile, fps):
     val = remap(mean_dist, low_rand_dst, mean_div_dst)
     val = np.clip(val, 0.0, 1.0)
     return val
-
-
-def tanimoto_1d(fps):
-    ds = []
-    for i in range(1, len(fps)):
-        ds.extend(DataStructs.BulkTanimotoSimilarity(
-            fps[i], fps[:i], returnDistance=True))
-    return ds
 
 #==============
 
@@ -334,7 +329,7 @@ def batch_conciseness(smiles, train_smiles=None):
 
 def conciseness(smile, train_smiles=None):
     canon = canon_smile(smile)
-    diff_len = len(canon) - len(smile)
+    diff_len = len(smile) -len(canon)
     val = np.clip(diff_len, 0.0, 20)
     val = 1 - 1.0 / 20.0 * val
     return val
