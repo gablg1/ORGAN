@@ -2,20 +2,61 @@ from __future__ import absolute_import, division, print_function
 from builtins import range
 import os
 import numpy as np
-import pandas as pd
 import csv
+import time
+import pickle
+import gzip
+import math
+import random
 from rdkit import rdBase
-from rdkit.Chem import PandasTools
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import Crippen, MolFromSmiles, MolToSmiles
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
+#====== load data
+
+
+def readNPModel(filename='NP_score.pkl.gz'):
+    print("mol_metrics: reading NP model ...")
+    start = time.time()
+    NP_model = pickle.load(gzip.open(filename))
+    end = time.time()
+    print("loaded in {}".format(end - start))
+    return NP_model
+
+NP_model = readNPModel()
+
+
+def readSAModel(filename='SA_score.pkl.gz'):
+    print("mol_metrics: reading SA model ...")
+    start = time.time()
+    model_data = pickle.load(gzip.open(filename))
+    outDict = {}
+    for i in model_data:
+        for j in range(1, len(i)):
+            outDict[i[j]] = float(i[0])
+    SA_model = outDict
+    end = time.time()
+    print("loaded in {}".format(end - start))
+    return SA_model
+
+SA_model = readSAModel()
 #====== math utility
 
 
 def remap(x, x_min, x_max):
     return (x - x_min) / (x_max - x_min)
+
+
+def constant_bump(x, x_low, x_high, decay=0.025):
+    if x <= x_low:
+        return np.exp(-(x - x_low)**2 / decay)
+    elif x >= x_high:
+        return np.exp(-(x - x_high)**2 / decay)
+    else:
+        return 1
+    return
 
 
 def pct(a, b):
@@ -24,6 +65,10 @@ def pct(a, b):
     return float(len(a)) / len(b)
 
 #====== encoding/decoding utility
+
+
+def canon_smile(smile):
+    return MolToSmiles(MolFromSmiles(smile))
 
 
 def verified_and_below(smile, max_len):
@@ -109,7 +154,7 @@ def print_params(p):
     return
 
 
-def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=True):
+def compute_results(model_samples, train_data, ord_dict, results={}, verbose=True):
     samples = [decode(s, ord_dict) for s in model_samples]
     results['mean_length'] = np.mean([len(sample) for sample in samples])
     results['n_samples'] = len(samples)
@@ -120,13 +165,14 @@ def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=
         sample for sample in samples if not verify_sequence(sample)]
     results['good_samples'] = len(verified_samples)
     results['bad_samples'] = len(unverified_samples)
-    metrics = {'novelty': batch_novelty,
-               'hard_novelty': batch_hardnovelty,
-               'soft_novelty': batch_softnovelty,
-               'diversity': batch_diversity,
-               'solubility': batch_solubility}
-    for key, func in metrics.items():
-        results[key] = np.mean(func(verified_samples, train_samples))
+    # collect metrics
+    metrics = ['novelty', 'hard_novelty', 'soft_novelty',
+               'diversity', 'conciseness', 'solubility',
+               'naturalness', 'synthesizability']
+
+    for objective in metrics:
+        func = load_reward(objective)
+        results[objective] = np.mean(func(verified_samples, train_data))
 
     # save smiles
     if 'Batch' in results.keys():
@@ -136,53 +182,67 @@ def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=
     # print results
     if verbose:
         print_results(verified_samples, unverified_samples,
-                      metrics.keys(), results)
+                      metrics, results)
     return
 
 
 def print_results(verified_samples, unverified_samples, metrics, results={}):
     print('~~~ Summary Results ~~~')
-    print('Total samples: {}'.format(results['n_samples']))
+    print('{:15s} : {:6d}'.format("Total samples", results['n_samples']))
     percent = results['uniq_samples'] / float(results['n_samples']) * 100
-    print('Unique      : {:6d} ({:2.2f}%)'.format(
-        results['uniq_samples'], percent))
-    percent = results['good_samples'] / float(results['n_samples']) * 100
-    print('Verified    : {:6d} ({:2.2f}%)'.format(
-        results['good_samples'], percent))
+    print('{:15s} : {:6d} ({:2.2f}%)'.format(
+        'Unique', results['uniq_samples'], percent))
     percent = results['bad_samples'] / float(results['n_samples']) * 100
-    print('Unverified  : {:6d} ({:2.2f}%)'.format(
-        results['bad_samples'], percent))
+    print('{:15s} : {:6d} ({:2.2f}%)'.format('Unverified',
+                                             results['bad_samples'], percent))
+    percent = results['good_samples'] / float(results['n_samples']) * 100
+    print('{:15s} : {:6d} ({:2.2f}%)'.format(
+        'Verified', results['good_samples'], percent))
+    print('\tmetrics...')
     for i in metrics:
-        print('{:11s} : {:1.4f}'.format(i, results[i]))
+        print('{:20s} : {:1.4f}'.format(i, results[i]))
 
-    print('\nExample of good samples:')
-    for s in verified_samples[0:10]:
-        print('' + s)
-    print('\nExample of bad samples:')
-    for s in unverified_samples[0:10]:
-        print('' + s)
+    if len(verified_samples) > 10:
+        print('\nExample of good samples:')
 
+        for s in verified_samples[0:10]:
+            print('' + s)
+    else:
+        print('\nno good samples found :(')
+
+    if len(unverified_samples) > 10:
+        print('\nExample of bad samples:')
+        for s in unverified_samples[0:10]:
+            print('' + s)
+    else:
+        print('\nno bad samples found :(')
+
+    print('~~~~~~~~~~~~~~~~~~~~~~~')
     return
 
 #====== diversity metric
 
 
 def batch_diversity(smiles, train_smiles):
-    return diversity(smiles, train_smiles)
-
-
-def diversity(smiles, train_smiles=None):
-    df = pd.DataFrame({'smiles': smiles})
-    PandasTools.AddMoleculeColumnToFrame(df, 'smiles', 'mol')
+    rand_smiles = random.sample(train_smiles, 100)
+    rand_mols = [Chem.MolFromSmiles(s) for s in rand_smiles]
     fps = [Chem.GetMorganFingerprintAsBitVect(
-        m, 4, nBits=2048) for m in df['mol']]
-    dist_1d = tanimoto_1d(fps)
-    mean_dist = np.mean(dist_1d)
-    mean_rand = 0.90549  # min random distance
-    mean_diverse = 0.95170  # max diverse distance
-    norm_dist = remap(mean_dist, mean_rand, mean_diverse)
-    norm_dist = np.clip(norm_dist, 0.0, 1.0)
-    return norm_dist
+        m, 4, nBits=2048) for m in rand_mols]
+    vals = [diversity(smile, fps) for smile in smiles]
+    return vals
+
+
+def diversity(smile, fps):
+    low_rand_dst = 0.9
+    mean_div_dst = 0.945
+    ref_mol = Chem.MolFromSmiles(smile)
+    ref_fps = Chem.GetMorganFingerprintAsBitVect(ref_mol, 4, nBits=2048)
+    dist = DataStructs.BulkTanimotoSimilarity(
+        ref_fps, fps, returnDistance=True)
+    mean_dist = np.mean(np.array(dist))
+    val = remap(mean_dist, low_rand_dst, mean_div_dst)
+    val = np.clip(val, 0.0, 1.0)
+    return val
 
 
 def tanimoto_1d(fps):
@@ -198,20 +258,20 @@ def tanimoto_1d(fps):
 def batch_novelty(smiles, train_smiles):
     vals = [novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
-    return np.mean(vals)
+    return vals
 
 
 def batch_hardnovelty(smiles, train_smiles):
     vals = [hard_novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
-    return np.mean(vals)
+    return vals
 
 
 def batch_softnovelty(smiles, train_smiles):
     vals = [soft_novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
 
-    return np.mean(vals)
+    return vals
 
 
 def novelty(smile, train_smiles):
@@ -227,36 +287,183 @@ def soft_novelty(smile, train_smiles):
 
 
 def hard_novelty(smile, train_smiles):
-    canon_smile = MolToSmiles(MolFromSmiles(smile))
-    newness = 1.0 if canon_smile not in train_smiles else 0.0
+    newness = 1.0 if canon_smile(smile) not in train_smiles else 0.0
     return newness
 
 
 #======= solubility
 
-def batch_solubility(smiles, train_smiles):
-    vals = [logP(smile, train_smiles) if verify_sequence(
-        smile) else 0 for smile in smiles]
-    return np.mean(vals)
+def batch_solubility(smiles, train_smiles=None):
+    vals = [logP(s, train_smiles) if verify_sequence(s) else 0 for s in smiles]
+    return vals
 
 
-def logP(smile, train_smiles):
-    low_logp = -2.10799552492
-    high_logp = 2.71567964162
+def logP(smile, train_smiles=None):
+    low_logp = -2.12178879609
+    high_logp = 6.0429063424
     logp = Crippen.MolLogP(Chem.MolFromSmiles(smile))
     val = remap(logp, low_logp, high_logp)
-    val = np.clip(logp, 0.0, 1.0)
+    val = np.clip(val, 0.0, 1.0)
     return val
+
+#====== DrugCandidate
+
+
+def drug_candidate(smile, train_smiles):
+    # solubility  −0.4 to +5.6 range
+    good_logp = constant_bump(logP(smile), 0.210, 0.945)
+    sa = SA_score(smile)
+    novel = soft_novelty(smile, train_smiles)
+    compact = conciseness(smile)
+    val = (compact + good_logp + sa + novel) / 4.0
+    return val
+
+
+def batch_drugcandidate(smiles, train_smiles):
+    vals = [drug_candidate(s, train_smiles)
+            if verify_sequence(s) else 0 for s in smiles]
+    return vals
+
+#====== Conciseness
+
+
+def batch_conciseness(smiles, train_smiles=None):
+    vals = [conciseness(s) if verify_sequence(s) else 0 for s in smiles]
+    return vals
+
+
+def conciseness(smile, train_smiles=None):
+    canon = canon_smile(smile)
+    diff_len = len(canon) - len(smile)
+    val = np.clip(diff_len, 0.0, 20)
+    val = 1 - 1.0 / 20.0 * val
+    return val
+
+#====== Contains substructure
+
+
+def substructure_match(smile, train_smiles=None, sub_mol=None):
+    mol = Chem.MolFromSmiles(smile)
+    val = mol.HasSubstructMatch(sub_mol)
+    return int(val)
+
+#====== NP-likeliness
+
+
+def NP_score(smile):
+    mol = Chem.MolFromSmiles(smile)
+    fp = Chem.GetMorganFingerprint(mol, 2)
+    bits = fp.GetNonzeroElements()
+
+    # calculating the score
+    score = 0.
+    for bit in bits:
+        score += NP_model.get(bit, 0)
+    score /= float(mol.GetNumAtoms())
+
+    # preventing score explosion for exotic molecules
+    if score > 4:
+        score = 4. + math.log10(score - 4. + 1.)
+    if score < -4:
+        score = -4. - math.log10(-4. - score + 1.)
+    val = np.clip(remap(score, -3, 1), 0.0, 1.0)
+    return val
+
+
+def batch_NPLikeliness(smiles, train_smiles=None):
+    scores = [NP_score(s) if verify_sequence(s) else 0 for s in smiles]
+    return scores
+#===== Synthetics Accesability score ===
+
+
+def SA_score(smile):
+    mol = Chem.MolFromSmiles(smile)
+    # fragment score
+    fp = Chem.GetMorganFingerprint(mol, 2)
+    fps = fp.GetNonzeroElements()
+    score1 = 0.
+    nf = 0
+    # for bitId, v in fps.items():
+    for bitId, v in fps.items():
+        nf += v
+        sfp = bitId
+        score1 += SA_model.get(sfp, -4) * v
+    score1 /= nf
+
+    # features score
+    nAtoms = mol.GetNumAtoms()
+    nChiralCenters = len(Chem.FindMolChiralCenters(
+        mol, includeUnassigned=True))
+    ri = mol.GetRingInfo()
+    nSpiro = Chem.CalcNumSpiroAtoms(mol)
+    nBridgeheads = Chem.CalcNumBridgeheadAtoms(mol)
+    nMacrocycles = 0
+    for x in ri.AtomRings():
+        if len(x) > 8:
+            nMacrocycles += 1
+
+    sizePenalty = nAtoms**1.005 - nAtoms
+    stereoPenalty = math.log10(nChiralCenters + 1)
+    spiroPenalty = math.log10(nSpiro + 1)
+    bridgePenalty = math.log10(nBridgeheads + 1)
+    macrocyclePenalty = 0.
+    # ---------------------------------------
+    # This differs from the paper, which defines:
+    #  macrocyclePenalty = math.log10(nMacrocycles+1)
+    # This form generates better results when 2 or more macrocycles are present
+    if nMacrocycles > 0:
+        macrocyclePenalty = math.log10(2)
+
+    score2 = 0. - sizePenalty - stereoPenalty - \
+        spiroPenalty - bridgePenalty - macrocyclePenalty
+
+    # correction for the fingerprint density
+    # not in the original publication, added in version 1.1
+    # to make highly symmetrical molecules easier to synthetise
+    score3 = 0.
+    if nAtoms > len(fps):
+        score3 = math.log(float(nAtoms) / len(fps)) * .5
+
+    sascore = score1 + score2 + score3
+
+    # need to transform "raw" value into scale between 1 and 10
+    min = -4.0
+    max = 2.5
+    sascore = 11. - (sascore - min + 1) / (max - min) * 9.
+    # smooth the 10-end
+    if sascore > 8.:
+        sascore = 8. + math.log(sascore + 1. - 9.)
+    if sascore > 10.:
+        sascore = 10.0
+    elif sascore < 1.:
+        sascore = 1.0
+    val = remap(sascore, 5, 1.5)
+    val = np.clip(val, 0.0, 1.0)
+    return val
+
+
+def batch_SA(smiles, train_smiles=None):
+    scores = [SA_score(s) for s in smiles]
+    return scores
+
+
+#===== Reward function
 
 
 def load_reward(objective):
 
-    if objective == 'novelty':
-        return novelty
-    elif objective == 'soft_novelty':
-        return soft_novelty
-    elif objective == 'solubility':
-        return logP
+    metrics = {}
+    metrics['novelty'] = batch_novelty
+    metrics['hard_novelty'] = batch_hardnovelty
+    metrics['soft_novelty'] = batch_softnovelty
+    metrics['diversity'] = batch_diversity
+    metrics['conciseness'] = batch_conciseness
+    metrics['solubility'] = batch_solubility
+    metrics['naturalness'] = batch_NPLikeliness
+    metrics['synthesizability'] = batch_SA
+    metrics['drug_candidate'] = batch_drugcandidate
+    if objective in metrics.keys():
+        return metrics[objective]
     else:
-        raise ValueError('objective not found!')
+        raise ValueError('objective {} not found!'.format(objective))
     return

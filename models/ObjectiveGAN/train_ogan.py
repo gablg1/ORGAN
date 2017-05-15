@@ -18,6 +18,7 @@ import pandas as pd
 import mol_metrics
 import music_metrics
 import sys
+from tqdm import tqdm
 
 
 if len(sys.argv) == 2:
@@ -80,9 +81,7 @@ def make_reward(train_samples):
     def batch_reward(samples):
         decoded = [mm.decode(sample, ord_dict) for sample in samples]
         pct_unique = len(list(set(decoded))) / float(len(decoded))
-        rewards = [reward_func(smile, train_samples) if mm.verify_sequence(
-            smile) else 0 for smile in decoded]
-
+        rewards = reward_func(decoded, train_samples)
         weights = np.array([pct_unique / float(decoded.count(sample))
                             for sample in decoded])
 
@@ -90,6 +89,17 @@ def make_reward(train_samples):
 
     return batch_reward
 
+
+def print_rewards(rewards):
+    print('Rewards be like...')
+    np.set_printoptions(precision=3, suppress=True)
+    print(rewards)
+    mean_r, std_r = np.mean(rewards), np.std(rewards)
+    min_r, max_r = np.min(rewards), np.max(rewards)
+    print('Mean: {:.3f} , Std:  {:.3f}'.format(mean_r, std_r),end='')
+    print(', Min: {:.3f} , Max:  {:.3f}\n'.format(min_r, max_r))
+    np.set_printoptions(precision=8, suppress=False)
+    return
 #=======================================
 ##########################################################################
 train_samples = mm.load_train_data(params['TRAIN_FILE'])
@@ -106,7 +116,8 @@ print('Starting ObjectiveGAN for {:7s}'.format(PREFIX))
 print('Data points in train_file {:7d}'.format(len(train_samples)))
 print('Max data length is        {:7d}'.format(DATA_LENGTH))
 print('Max length to use is      {:7d}'.format(MAX_LENGTH))
-print('Avg length to use is      {:7f}'.format(np.mean(map(len, to_use))))
+print('Avg length to use is      {:7f}'.format(
+    np.mean([len(s) for s in to_use])))
 print('Num valid data points is  {:7d}'.format(POSITIVE_NUM))
 print('Size of alphabet is       {:7d}'.format(NUM_EMB))
 
@@ -170,8 +181,9 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
 
     #  pre-train generator
     print('Start pre-training...')
-    for epoch in range(PRE_EPOCH_NUM):
-        print('pre-train epoch:', epoch)
+    start = time.time()
+    for epoch in tqdm(range(PRE_EPOCH_NUM)):
+        print(' gen pre-train')
         loss = pre_train_epoch(sess, generator, gen_data_loader)
         if epoch == 10 or epoch % 40 == 0:
             samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
@@ -188,10 +200,11 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
     likelihood_data_loader.create_batches(samples)
 
     print('Start training discriminator...')
-    for i in range(dis_alter_epoch):
-        print('epoch {}'.format(i))
+    for i in tqdm(range(dis_alter_epoch)):
+        print(' discriminator pre-train')
         d_loss, acc = train_discriminator()
-
+    end = time.time()
+    print('Total time was {:.4f}s'.format(end - start))
     return
 
 
@@ -287,6 +300,11 @@ def main():
         saver.restore(sess, ckpt_file)
         print('Pretrain loaded from previous checkpoint {}'.format(ckpt_file))
     else:
+        if params["LOAD_PRETRAIN"]:
+            print('\t* No pre-training data found as {:s}.'.format(ckpt_file))
+        else:
+            print('\t* LOAD_PRETRAIN was set to false.')
+
         sess.run(tf.global_variables_initializer())
         pretrain(sess, generator, target_lstm, train_discriminator)
         path = saver.save(sess, ckpt_file)
@@ -300,7 +318,7 @@ def main():
     print('#########################################################################')
     print('Start Reinforcement Training Generator...')
     results_rows = []
-    for nbatch in range(TOTAL_BATCH):
+    for nbatch in tqdm(range(TOTAL_BATCH)):
         results = OrderedDict({'exp_name': PREFIX})
         if nbatch % 1 == 0 or nbatch == TOTAL_BATCH - 1:
             print('* Making samples')
@@ -332,10 +350,9 @@ def main():
             samples = generator.generate(sess)
             rewards = rollout.get_reward(
                 sess, samples, 16, cnn, batch_reward, D_WEIGHT)
-            print('Rewards be like...')
-            print(rewards)
             nll = generator.generator_step(sess, samples, rewards)
-
+            # results
+            print_rewards(rewards)
             print('neg-loglike: {}'.format(nll))
             results['neg-loglike'] = nll
         rollout.update_params()
