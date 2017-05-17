@@ -9,6 +9,7 @@ from dis_dataloader import Dis_dataloader
 from rollout import ROLLOUT
 from target_lstm import TARGET_LSTM
 import cPickle
+import editdistance
 
 def pct(a, b):
     if len(b) == 0:
@@ -63,6 +64,15 @@ def verify_sequence(sequence):
 
 def clean(sequence): 
     return [note.strip("_^=\\0123456789") for note in sequence if is_note(note.strip("_^=\\0123456789"))]
+
+def sequence_to_clean_string(sequence):
+    s = ""
+    for c in clean(sequence):
+        s += c
+    return s
+
+def editdistance(m1, m2):
+    return float(editdistance.eval(m1, m2)) / max(len(m1), len(m2))
 
 def notes_and_successors(sequence): return [(note, sequence[i+1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
 
