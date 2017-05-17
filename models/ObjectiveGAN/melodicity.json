@@ -3,7 +3,7 @@
     "TRAIN_FILE":"../../data/music_large.txt",
     "METRICS_FILE":"music_metrics",
     "OBJECTIVE":"ratio_of_steps",
-    "D_WEIGHT" : 0.2,
+    "D_WEIGHT" : 1,
     "G_STEPS" : 1,
     "SEED":88,
     "G_PRETRAIN_STEPS":240,
