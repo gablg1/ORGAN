@@ -78,7 +78,6 @@ def verify_sequence(sequence):
 def clean(sequence):
     return [note.strip("_^=\\0123456789") for note in sequence if is_note(note.strip("_^=\\0123456789"))]
 
-<<<<<<< HEAD
 def sequence_to_clean_string(sequence):
     s = ""
     for c in clean(sequence):
@@ -89,8 +88,6 @@ def editdistance(m1, m2):
     return float(editdistance.eval(m1, m2)) / max(len(m1), len(m2))
 
 def notes_and_successors(sequence): return [(note, sequence[i+1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
-=======
->>>>>>> 5c5fe367a18f2bf84ab3e5de233838343a550d48
 
 def notes_and_successors(sequence): return [(note, sequence[
     i + 1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
