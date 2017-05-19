@@ -1,2 +1,0 @@
-model_checkpoint_path: "toy_model.ckpt"
-all_model_checkpoint_paths: "toy_model.ckpt"
