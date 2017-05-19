@@ -305,7 +305,6 @@ def logP(smile, train_smiles=None):
 
 
 def drug_candidate(smile, train_smiles):
-    # solubility  −0.4 to +5.6 range
     good_logp = constant_bump(logP(smile), 0.210, 0.945)
     sa = SA_score(smile)
     novel = soft_novelty(smile, train_smiles)

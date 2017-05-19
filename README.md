@@ -1,6 +1,5 @@
-# ObjectiveGAN
+# Objective-Reinforced GANs
 
-ObjectiveGAN: Using Generative Adversarial Networks and Reinforcement Learning to fine-tune sequence generation models.
-My Harvard Senior thesis
+In order to train the model, cd into `model` and run
 
-Code implementing the model can be found in `models/ObjectiveGAN`
+```python train_ogan.py```

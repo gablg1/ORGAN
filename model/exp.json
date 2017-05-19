@@ -1,6 +1,6 @@
 {
     "EXP_NAME":"toy",
-    "TRAIN_FILE":"../../data/toy.csv",
+    "TRAIN_FILE":"../data/toy.csv",
     "METRICS_FILE":"mol_metrics",
     "OBJECTIVE":"novelty",
     "D_WEIGHT" : 0.5,

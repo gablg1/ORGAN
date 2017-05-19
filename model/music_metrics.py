@@ -1,6 +1,5 @@
 import os
 import numpy as np
-<<<<<<< HEAD
 import tensorflow as tf
 import random
 import time
@@ -10,9 +9,6 @@ from rollout import ROLLOUT
 from target_lstm import TARGET_LSTM
 import cPickle
 import editdistance
-=======
-
->>>>>>> 5c5fe367a18f2bf84ab3e5de233838343a550d48
 
 def pct(a, b):
     if len(b) == 0:
