@@ -1,7 +1,0 @@
-*.pyc
-*__pycache__/
-*__pycache__/*
-# tensorflow checkpoints
-*.index
-*.meta
-*.data*

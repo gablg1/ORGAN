@@ -1,0 +1,18 @@
+{
+    "EXP_NAME":"smallmols",
+    "TRAIN_FILE":"../../data/small_mols.csv",
+    "METRICS_FILE":"mol_metrics",
+    "OBJECTIVE":"novelty",
+    "D_WEIGHT" : 0.5,
+    "CHK_PATH" : "checkpoints",
+    "G_STEPS" : 1,
+    "SEED":88,
+    "G_PRETRAIN_STEPS":240,
+    "D_PRETRAIN_STEPS":50,
+    "TOTAL_BATCH":0,
+    "MAX_LENGTH":80,
+    "BATCH_SIZE":64,
+    "LOAD_PRETRAIN":true,
+    "LOAD_PREV_SESS":true,
+    "EPOCH_SAVES":20
+}
