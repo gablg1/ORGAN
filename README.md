@@ -10,20 +10,25 @@ Then **ORGAN** if for you, define simple reward functions and alternate between 
 
 Based on work from [](arxiv link here)
 
-## How to run
+## How to train
 
 In order to train the model, cd into `model` and run
 
 ```python train_ogan.py exp.json```
 
-where **exp.json** is a experiment configuration file
+where **exp.json** is a experiment configuration file.
+
+A GPU is recommended since it can take several days to run, depending on dataset and sequence extension, algorithm is not parallelized for multiple GPUs.
+
+## How to sample
+
 
 ## Requirements to run
 
 * Tensorflow 1.0
 * Python 2 or 3
 * rdkit for molecular purposes
-* GPU is recomended since it can take several days to run, algorithm is not parallelized for multiple GPUs
+*
 
 ## Make your own experiment
 
