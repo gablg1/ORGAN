@@ -6,9 +6,9 @@
 
 * Working with discrete sequence data (text, molecular SMILES, abc musical notation ,etc.)?
 
-Then **ORGAN** if for you, define simple reward functions and alternate between adversarial and reinforced training.
+Then **ORGAN** is for you, define simple reward functions and alternate between adversarial and reinforced training.
 
-Based on work from [](arxiv link here)
+Based on work from [https://arxiv.org/abs/1705.10843](https://arxiv.org/abs/1705.10843)
 
 ## How to train
 
@@ -28,9 +28,12 @@ A GPU is recommended since it can take several days to run, depending on dataset
 * Tensorflow 1.0
 * Python 2 or 3
 * rdkit for molecular purposes
-*
+* More in requirements.txt (install with `pip install -r requirements.txt`)
 
 ## Make your own experiment
 
+Coming soon
 
 ## Dockerfile
+
+Coming soon
