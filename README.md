@@ -6,7 +6,7 @@
 
 * Working with discrete sequence data (text, molecular SMILES, abc musical notation ,etc.)?
 
-Then **ORGAN** is for you, define simple reward functions and alternate between adversarial and reinforced training.
+Then **ORGAN** is for you, define simple objective functions to bias the model and generate sequences in an adversarial fashion. ORGAN improves on the given objective without losing interestingness in the generated data.
 
 Based on work from [https://arxiv.org/abs/1705.10843](https://arxiv.org/abs/1705.10843)
 
