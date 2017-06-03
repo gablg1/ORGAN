@@ -37,3 +37,5 @@ Coming soon
 ## Dockerfile
 
 Coming soon
+
+Note: this code is based on [previous work by the SeqGAN team](https://github.com/LantaoYu/SeqGAN). Many thanks to SeqGAN.
