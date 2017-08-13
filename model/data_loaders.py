@@ -2,12 +2,26 @@ import numpy as np
 from re import compile as _Re
 
 
-def split_unicode_chrs(text):
-    _unicode_chr_splitter = _Re('(?s)((?:[\ud800-\udbff][\udc00-\udfff])|.)').split
-    return [chr for chr in _unicode_chr_splitter(text) if chr]
+class Gen_Dataloader():
+    def __init__(self, batch_size):
+        self.batch_size = batch_size
+
+    def create_batches(self, samples):
+        self.num_batch = int(len(samples) / self.batch_size)
+        samples = samples[:self.num_batch * self.batch_size]
+        self.sequence_batch = np.split(np.array(samples), self.num_batch, 0)
+        self.pointer = 0
+
+    def next_batch(self):
+        ret = self.sequence_batch[self.pointer]
+        self.pointer = (self.pointer + 1) % self.num_batch
+        return ret
+
+    def reset_pointer(self):
+        self.pointer = 0
 
 
-class Dis_dataloader():
+class Dis_Dataloader():
     def __init__(self):
         self.vocab_size = 5000
 
@@ -33,7 +47,8 @@ class Dis_dataloader():
         Returns input vectors, labels, vocabulary, and inverse vocabulary.
         """
         # Load and preprocess data
-        sentences, labels = self.load_data_and_labels(positive_file, negative_file)
+        sentences, labels = self.load_data_and_labels(
+            positive_file, negative_file)
         shuffle_indices = np.random.permutation(np.arange(len(labels)))
         x_shuffled = sentences[shuffle_indices]
         y_shuffled = labels[shuffle_indices]
