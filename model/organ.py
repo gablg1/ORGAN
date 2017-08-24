@@ -1,38 +1,29 @@
 from __future__ import absolute_import, division, print_function
 import os
-from gpu_utils import pick_gpu_lowest_memory
-try:
-    gpu_free_number = str(pick_gpu_lowest_memory())
-    os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
-    import tensorflow as tf
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-except Exception:
-    import tensorflow as tf
+import tensorflow as tf
 from builtins import range
 from collections import OrderedDict
-from generator import Generator, Rollout
 import numpy as np
-import tensorflow as tf
 import random
+import importlib
 import dill as pickle
-import mol_methods as mm
 from data_loaders import Gen_Dataloader, Dis_Dataloader
+from generator import Generator
+from rollout import Rollout
 from discriminator import Discriminator
-from custom_metrics import get_metrics, metrics_loading
 from tensorflow import logging
 from rdkit import rdBase
 import pandas as pd
 from tqdm import tqdm
-__version__ = '0.4.0'
 
 
-class ORGANIC(object):
+class ORGAN(object):
     """Main class, where every interaction between the user
     and the backend is performed.
     """
 
-    def __init__(self, name, params={}, use_gpu=True, verbose=True):
+    def __init__(self, name, metrics_module, params={}, use_gpu=True,
+                 verbose=True,):
         """Parameter initialization.
 
         Arguments
@@ -40,6 +31,9 @@ class ORGANIC(object):
 
             - name. String which will be used to identify the
             model in any folders or files created.
+
+            - metrics_module. String identifying the module containing
+            the metrics.
 
             - params. Optional. Dictionary containing the parameters
             that the user whishes to specify.
@@ -176,8 +170,11 @@ class ORGANIC(object):
         else:
             self.DIS_L2REG = 0.2
 
-        self.AV_METRICS = get_metrics()
-        self.LOADINGS = metrics_loading()
+        global mm
+        mm = importlib.import_module(metrics_module)
+
+        self.AV_METRICS = mm.get_metrics()
+        self.LOADINGS = mm.metrics_loading()
 
         self.PRETRAINED = False
         self.SESS_LOADED = False
@@ -191,7 +188,7 @@ class ORGANIC(object):
         Arguments
         -----------
 
-            - file. String pointing to a .smi or .csv file.
+            - file. String pointing to the dataset file.
 
         """
 
@@ -289,32 +286,24 @@ class ORGANIC(object):
 
             - name. String used to identify the metric.
 
-            - metric. Function taking as argument a SMILES
-            string and returning a float value.
+            - metric. Function taking as argument a sequence
+            and returning a float value.
 
             - load_metric. Optional. Preprocessing needed
             at the beginning of the code.
 
             - pre_batch. Optional. Boolean specifying whether
             there is any preprocessing when the metric is applied
-            to a batch of smiles. False by default.
+            to a batch of sequences. False by default.
 
             - pre_metric. Optional. Preprocessing operations
             for the metric. Will be ignored if pre_batch is False.
 
-        Notes
+        Note
         -----------
 
-            - For combinations of already existing metrics, check
+            For combinations of already existing metrics, check
             the define_metric_as_combination method.
-
-            - For metrics based in neural networks or gaussian
-            processes, please check our more specific functions
-            define_nn_metric and define_gp_metric.
-
-            - Check the mol_methods module for useful processing
-            options, and the custom_metrics module for examples
-            of how metrics are defined in ORGANIC.
 
         """
 
@@ -374,10 +363,9 @@ class ORGANIC(object):
         if self.verbose:
             print('Defined metric {}'.format(name))
 
-        metric = [nmetric, load_metric]
+        nmetric = [metric, load_metric]
         with open('../data/{}.pkl'.format(name), 'wb') as f:
-            pickle.dump(metric, f)
-
+            pickle.dump(nmetric, f)
 
     def define_metric_as_remap(self, name, metric, remapping):
         """Sets up a metric made from a remapping of a
@@ -392,12 +380,6 @@ class ORGANIC(object):
             - metric. String identifying the previous metric.
 
             - remapping. Remap function.
-
-        Note 1
-        -----------
-
-            Use of the mathematical remappings provided in the
-            mol_methods module is highly recommended.
 
         """
 
@@ -426,7 +408,7 @@ class ORGANIC(object):
             - name. String used to identify the metric.
 
             - file. String pointing to the .pkl file. Will use
-            data/name.pkl by default.
+            ../data/name.pkl by default.
 
         """
         if file is None:
@@ -458,18 +440,6 @@ class ORGANIC(object):
 
             The program will crash if both lists have different
             lengths.
-
-        Example
-        -----------
-
-            The following examples trains the model for, sequentially,
-            20 epochs of PCE, 100 epochs of bandgap and another 20
-            epochs of PCE.
-
-                model = ORGANIC('model')
-                model.load_training_set('sample.smi')
-                model.set_training_program(['pce', 'bandgap', 'pce'],
-                                           [20, 100, 20])
 
         """
 
@@ -747,7 +717,7 @@ class ORGANIC(object):
 
             if self.kwargs[metric] is not None:
 
-                def batch_reward(samples):
+                def batch_reward(samples, train_samples=None):
                     decoded = [mm.decode(sample, self.ord_dict)
                                for sample in samples]
                     pct_unique = len(list(set(decoded))) / float(len(decoded))
@@ -761,7 +731,7 @@ class ORGANIC(object):
 
             else:
 
-                def batch_reward(samples):
+                def batch_reward(samples, train_samples=None):
                     decoded = [mm.decode(sample, self.ord_dict)
                                for sample in samples]
                     pct_unique = len(list(set(decoded))) / float(len(decoded))
@@ -782,7 +752,7 @@ class ORGANIC(object):
             print('============================\n')
 
             # results
-            mm.compute_results(
+            mm.compute_results(batch_reward,
                 gen_samples, self.train_samples, self.ord_dict, results)
 
             for it in range(self.GEN_ITERATIONS):
@@ -844,8 +814,7 @@ class ORGANIC(object):
 
                 if results_rows is not None:
                     df = pd.DataFrame(results_rows)
-                    df.to_csv('{}_results.csv'.format(self.folder),
-                              index=False)
+                    df.to_csv('{}_results.csv'.format(self.PREFIX), index=False)
                 if nbatch is None:
                     label = 'final'
                 else:
@@ -867,8 +836,8 @@ class ORGANIC(object):
 if __name__ == '__main__':
 
     # Setup model
-    model = ORGANIC('metrics', params={'PRETRAIN_GEN_EPOCHS': 1, 'PRETRAIN_DIS_EPOCHS': 1})
-    model.load_training_set('../data/trainingsets/toy.csv')
-    model.set_training_program(['validity'], [1])
+    model = ORGAN('test', 'mol_metrics', params={'PRETRAIN_DIS_EPOCHS': 1})
+    model.load_training_set('../data/toy.csv')
+    model.set_training_program(['novelty'], [1])
     model.load_metrics()
     model.train(ckpt_dir='ckpt')

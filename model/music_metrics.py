@@ -56,6 +56,7 @@ def encode(sequence, max_len, char_dict):
 
 
 def decode(ords, ord_dict):
+    print(ords)
     return ' '.join(unpad([ord_dict[o] for o in ords]))
 
 
