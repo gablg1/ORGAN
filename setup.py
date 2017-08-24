@@ -9,7 +9,7 @@ setup(
   author_email = 'gabriel@pagedraw.io',
   url = 'https://github.com/gablg1/ORGAN',
   maintainer = 'Carlos Outeiral',
-  maintainer_email = 'carlos@outeiral.net'
+  maintainer_email = 'carlos@outeiral.net',
   download_url = 'https://github.com/gablg1/ORGAN/archive/0.2.tar.gz',
   keywords = ['organ', 'generative models', 'sequence generation', 'machine learning'],
   classifiers = [],
