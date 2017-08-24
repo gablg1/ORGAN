@@ -1,14 +1,16 @@
 import os
 import numpy as np
-import tensorflow as tf
-import random
-import time
-from gen_dataloader import Gen_Data_loader
-from dis_dataloader import Dis_dataloader
-from rollout import ROLLOUT
-from target_lstm import TARGET_LSTM
-import cPickle
 import editdistance
+
+
+notes = ['C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
+         'c', 'd', 'e', 'f', 'g', 'a', 'b', 'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'']
+
+notes_and_frequencies = {'C,': 65.41, 'D,': 73.42, 'E,': 82.41, 'F,': 87.31, 'G,': 98, 'A,': 110, 'B,': 123.47,
+                         'C': 130.81, 'D': 146.83, 'E': 164.81, 'F': 174.61, 'G': 196, 'A': 220, 'B': 246.94,
+                         'c': 261.63, 'd': 293.66, 'e': 329.63, 'f': 349.23, 'g': 392, 'a': 440, 'b': 493.88,
+                         'c\'': 523.25, 'd\'': 587.33, 'e\'': 659.25, 'f\'': 698.46, 'g\'': 783.99, 'a\'': 880, 'b\'': 987.77}
+
 
 def pct(a, b):
     if len(b) == 0:
@@ -40,7 +42,8 @@ def pad(sequence, n, pad_char='_'):
 
 
 def unpad(sequence, pad_char='_'):
-    def reverse(s): return s[::-1]
+    def reverse(s):
+        return s[::-1]
     rev = reverse(sequence)
     for i, elem in enumerate(rev):
         if elem != pad_char:
@@ -48,22 +51,17 @@ def unpad(sequence, pad_char='_'):
     return sequence
 
 
-def encode(sequence, max_len, char_dict): return [
-    char_dict[c] for c in pad(sequence, max_len)]
+def encode(sequence, max_len, char_dict):
+    return [char_dict[c] for c in pad(sequence, max_len)]
 
 
-def decode(ords, ord_dict): return ' '.join(unpad([ord_dict[o] for o in ords]))
-
-notes = ['C,', 'D,', 'E,', 'F,', 'G,', 'A,', 'B,', 'C', 'D', 'E', 'F', 'G', 'A', 'B',
-         'c', 'd', 'e', 'f', 'g', 'a', 'b', 'c\'', 'd\'', 'e\'', 'f\'', 'g\'', 'a\'', 'b\'']
-
-notes_and_frequencies = {'C,': 65.41, 'D,': 73.42, 'E,': 82.41, 'F,': 87.31, 'G,': 98, 'A,': 110, 'B,': 123.47,
-                         'C': 130.81, 'D': 146.83, 'E': 164.81, 'F': 174.61, 'G': 196, 'A': 220, 'B': 246.94,
-                         'c': 261.63, 'd': 293.66, 'e': 329.63, 'f': 349.23, 'g': 392, 'a': 440, 'b': 493.88,
-                         'c\'': 523.25, 'd\'': 587.33, 'e\'': 659.25, 'f\'': 698.46, 'g\'': 783.99, 'a\'': 880, 'b\'': 987.77}
+def decode(ords, ord_dict):
+    print(ords)
+    return ' '.join(unpad([ord_dict[o] for o in ords]))
 
 
-def is_note(note): return note in notes
+def is_note(note):
+    return note in notes
 
 
 def verify_sequence(sequence):
@@ -74,19 +72,20 @@ def verify_sequence(sequence):
 def clean(sequence):
     return [note.strip("_^=\\0123456789") for note in sequence if is_note(note.strip("_^=\\0123456789"))]
 
+
 def sequence_to_clean_string(sequence):
     s = ""
     for c in clean(sequence):
         s += c
     return s
 
+
 def editdistance(m1, m2):
     return float(editdistance.eval(m1, m2)) / max(len(m1), len(m2))
 
-def notes_and_successors(sequence): return [(note, sequence[i+1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
 
-def notes_and_successors(sequence): return [(note, sequence[
-    i + 1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
+def notes_and_successors(sequence):
+    return [(note, sequence[i + 1]) for i, note in enumerate(sequence) if i < len(sequence) - 1]
 
 
 def is_perf_fifth(note, succ):
@@ -98,9 +97,7 @@ def tonality(sequence, train_data):
     if not verify_sequence(sequence):
         return 0
     clean_sequence = clean(sequence)
-
     notes_and_succs = notes_and_successors(clean_sequence)
-
     return np.mean([(1 if is_perf_fifth(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
 
 
@@ -140,8 +137,8 @@ def ratio_of_steps(sequence, train_data):
 
     notes_and_succs = notes_and_successors(clean_sequence)
 
-    def is_step(note, succ): return abs(
-        notes.index(note) - notes.index(succ)) == 1
+    def is_step(note, succ):
+        return abs(notes.index(note) - notes.index(succ)) == 1
 
     return np.mean([(1 if is_step(note, successor) else 0) for note, successor in notes_and_succs]) if len(sequence) > 1 else 0
 
@@ -221,19 +218,6 @@ def load_train_data(filename):
     return data
 
 
-def load_reward(objective):
-
-    if objective == 'melodicity':
-        return melodicity
-    elif objective == 'tonality':
-        return tonality
-    elif objective == 'ratio_of_steps':
-        return ratio_of_steps
-    else:
-        raise ValueError('objective not found!')
-    return
-
-
 def print_params(p):
     print('Using parameters:')
     for key, value in p.items():
@@ -256,7 +240,7 @@ def save_abc(name, smiles):
     return
 
 
-def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=True):
+def compute_results(reward, model_samples, train_samples, ord_dict, results={}, verbose=True):
     samples = [decode(s, ord_dict) for s in model_samples]
     results['mean_length'] = np.mean([len(sample) for sample in samples])
     results['n_samples'] = len(samples)
@@ -265,7 +249,7 @@ def compute_results(model_samples, train_samples, ord_dict, results={}, verbose=
                'melodicity': batch(melodicity),
                'tonality': batch(tonality)}
     for key, func in metrics.items():
-        results[key] = np.mean(func(samples, train_samples))
+        results[key] = np.mean(reward(samples, train_samples))
 
     if 'Batch' in results.keys():
         file_name = '{}_{}'.format(results['exp_name'], results['Batch'])
@@ -290,3 +274,19 @@ def print_results(samples, metrics, results={}):
         print('' + s)
 
     return
+
+def metrics_loading():
+
+    loading = {}
+    loading['melodicity'] = lambda *args: None
+    loading['tonality'] = lambda *args: None
+    loading['ratio_of_steps'] = lambda *args: None
+    return loading
+
+def get_metrics():
+
+    objective = {}
+    objective['melodicity'] = melodicity
+    objective['tonality'] = tonality
+    objective['ratio_of_steps'] = ratio_of_steps
+    return objective

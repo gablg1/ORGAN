@@ -28,7 +28,7 @@ def highway(input_, size, layer_size=1, bias=-2, f=tf.nn.relu):
     return output
 
 
-class TextCNN(object):
+class Discriminator(object):
     """
     A CNN for text classification.
     Uses an embedding layer, followed by a convolutional, max-pooling and softmax layer.

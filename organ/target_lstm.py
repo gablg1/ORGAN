@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 
 
-class TARGET_LSTM(object):
+class Target_LSTM(object):
     def __init__(self, num_emb, batch_size, emb_dim, hidden_dim,
                  sequence_length, start_token):
         self.num_emb = num_emb

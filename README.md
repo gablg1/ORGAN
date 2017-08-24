@@ -1,41 +1,30 @@
 # Objective-Reinforced GANs (ORGAN)
 
-* Want the diversity and interestingness that you get with samples from an adversarial process (GAN)?
+Have you ever wanted...
 
-* Want the directed focus you can give algorithms with Reinforcement Learning? (RL)
+* to generate samples that are both diverse and interesting, like in an adversarial process (GAN)?
 
-* Working with discrete sequence data (text, molecular SMILES, abc musical notation ,etc.)?
+* to direct this generative process towards certain objectives, as in Reinforcement Learning (RL)?
 
-Then **ORGAN** is for you, define simple objective functions to bias the model and generate sequences in an adversarial fashion. ORGAN improves on the given objective without losing interestingness in the generated data.
+* to work with discrete sequence data (text, musical notation, SMILES,...)?
 
-Based on work from [https://arxiv.org/abs/1705.10843](https://arxiv.org/abs/1705.10843)
+Then, maybe **ORGAN** ([Objective-Reinforced Generative Adversarial Networks](https://arxiv.org/abs/1705.10843)) is for you. Our concept allows to define simple *reward functions* to bias the model and generate sequences in an adversarial fashion, improving a given objective without losing "interestingness" in the generated data.
+
+This implementation is authored by **Gabriel L. Guimaraes** (gabriel@pagedraw.io), **Benjamin Sanchez-Lengeling** (beangoben@gmail.com), **Carlos Outeiral** (carlos@outeiral.net), **Pedro Luis Cunha Farias** (pfarias@college.harvard.edu) and **Alan Aspuru-Guzik** (alan@aspuru.com), associated to Harvard University, Department of Chemistry and Chemical Biology, at the time of release.
+
+We thank the [previous work by the SeqGAN team](https://github.com/LantaoYu/SeqGAN). This code is inspired on SeqGAN.
 
 ## How to train
 
-In order to train the model, cd into `model` and run
+Here's a self-explaining example:
 
-```python train_ogan.py exp.json```
+```python
+model = ORGAN('test', 'music_metrics')             # Loads a ORGANIC with name 'test', using music metrics
+model.load_training_set('../data/music_small.txt') # Loads the training set
+model.set_training_program(['tonality'], [50])     # Sets the training program as 50 epochs with the tonality metric
+model.load_metrics()                               # Loads all the metrics
+model.train()                                      # Proceeds with the training
+```
 
-where **exp.json** is a experiment configuration file.
+The training might take several days to run, depending on the dataset and sequence extension. For this reason, a GPU is recommended (although this model has not yet been parallelized for multiple GPUs).
 
-A GPU is recommended since it can take several days to run, depending on dataset and sequence extension, algorithm is not parallelized for multiple GPUs.
-
-## How to sample
-
-
-## Requirements to run
-
-* Tensorflow 1.0
-* Python 2 or 3
-* rdkit for molecular purposes
-* More in requirements.txt (install with `pip install -r requirements.txt`)
-
-## Make your own experiment
-
-Coming soon
-
-## Dockerfile
-
-Coming soon
-
-Note: We thank the [previous work by the SeqGAN team](https://github.com/LantaoYu/SeqGAN). This code is based on SeqGAN.
