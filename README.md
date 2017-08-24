@@ -14,17 +14,17 @@ This implementation is authored by **Gabriel L. Guimaraes** (gabriel@pagedraw.io
 
 We thank the [previous work by the SeqGAN team](https://github.com/LantaoYu/SeqGAN). This code is inspired on SeqGAN.
 
-## ORGANIC
-
 If interested in the specific application of ORGANs in Chemistry, please check out [ORGANIC](https://chemrxiv.org/articles/ORGANIC_1_pdf/5309668/3).
 
 ## How to train
 
-First make sure you have all dependencies installed by running `pip install -r requiremenets.txt`.
+First make sure you have all dependencies installed by running `pip install -r requirements.txt`.
 
 We provide a working example that can be run with `python example.py`. ORGAN can be used in 5 lines of code:
 
 ```python
+from organ import ORGAN
+
 model = ORGAN('test', 'music_metrics')             # Loads a ORGANIC with name 'test', using music metrics
 model.load_training_set('../data/music_small.txt') # Loads the training set
 model.set_training_program(['tonality'], [50])     # Sets the training program as 50 epochs with the tonality metric
