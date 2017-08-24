@@ -7,14 +7,16 @@ import numpy as np
 import random
 import importlib
 import dill as pickle
-from data_loaders import Gen_Dataloader, Dis_Dataloader
-from generator import Generator
-from rollout import Rollout
-from discriminator import Discriminator
+from organ.data_loaders import Gen_Dataloader, Dis_Dataloader
+from organ.generator import Generator
+from organ.rollout import Rollout
+from organ.discriminator import Discriminator
 from tensorflow import logging
 from rdkit import rdBase
 import pandas as pd
 from tqdm import tqdm
+import organ.mol_metrics
+import organ.music_metrics
 
 
 class ORGAN(object):
@@ -171,7 +173,12 @@ class ORGAN(object):
             self.DIS_L2REG = 0.2
 
         global mm
-        mm = importlib.import_module(metrics_module)
+        if metrics_module == 'mol_metrics':
+            mm = mol_metrics
+        elif metrics_module == 'music_metrics':
+            mm = music_metrics
+        else:
+            raise ValueError('Undefined metrics')
 
         self.AV_METRICS = mm.get_metrics()
         self.LOADINGS = mm.metrics_loading()
@@ -832,12 +839,3 @@ class ORGAN(object):
 
         print('\n######### FINISHED #########')
 
-
-if __name__ == '__main__':
-
-    # Setup model
-    model = ORGAN('test', 'mol_metrics', params={'PRETRAIN_DIS_EPOCHS': 1})
-    model.load_training_set('../data/toy.csv')
-    model.set_training_program(['novelty'], [1])
-    model.load_metrics()
-    model.train(ckpt_dir='ckpt')

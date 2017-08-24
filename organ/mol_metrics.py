@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 from builtins import range
+import organ
 import os
 import numpy as np
 import csv
@@ -20,6 +21,8 @@ rdBase.DisableLog('rdApp.error')
 def readNPModel(filename='NP_score.pkl.gz'):
     print("mol_metrics: reading NP model ...")
     start = time.time()
+    if filename == 'NP_score.pkl.gz':
+        filename = os.path.join(os.path.dirname(organ.__file__), filename)
     NP_model = pickle.load(gzip.open(filename))
     end = time.time()
     print("loaded in {}".format(end - start))
@@ -31,6 +34,8 @@ NP_model = readNPModel()
 def readSAModel(filename='SA_score.pkl.gz'):
     print("mol_metrics: reading SA model ...")
     start = time.time()
+    if filename == 'SA_score.pkl.gz':
+        filename = os.path.join(os.path.dirname(organ.__file__), filename)
     model_data = pickle.load(gzip.open(filename))
     outDict = {}
     for i in model_data:
