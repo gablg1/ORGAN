@@ -14,9 +14,15 @@ This implementation is authored by **Gabriel L. Guimaraes** (gabriel@pagedraw.io
 
 We thank the [previous work by the SeqGAN team](https://github.com/LantaoYu/SeqGAN). This code is inspired on SeqGAN.
 
+## ORGANIC
+
+If interested in the specific application of ORGANs in Chemistry, please check out [ORGANIC](https://chemrxiv.org/articles/ORGANIC_1_pdf/5309668/3).
+
 ## How to train
 
-Here's a self-explaining example:
+First make sure you have all dependencies installed by running `pip install -r requiremenets.txt`.
+
+We provide a working example that can be run with `python example.py`. ORGAN can be used in 5 lines of code:
 
 ```python
 model = ORGAN('test', 'music_metrics')             # Loads a ORGANIC with name 'test', using music metrics
