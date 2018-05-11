@@ -2,19 +2,23 @@ from __future__ import absolute_import, division, print_function
 import os
 import tensorflow as tf
 from builtins import range
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import numpy as np
 import random
-import importlib
 import dill as pickle
 from organ.data_loaders import Gen_Dataloader, Dis_Dataloader
 from organ.generator import Generator
+from organ.wgenerator import WGenerator
 from organ.rollout import Rollout
 from organ.discriminator import Discriminator
+from organ.wdiscriminator import WDiscriminator
+
+#from organ.discriminator import WDiscriminator as Discriminator
+
 from tensorflow import logging
 from rdkit import rdBase
 import pandas as pd
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import organ.mol_metrics
 import organ.music_metrics
 
@@ -24,8 +28,8 @@ class ORGAN(object):
     and the backend is performed.
     """
 
-    def __init__(self, name, metrics_module, params={}, use_gpu=True,
-                 verbose=True,):
+    def __init__(self, name, metrics_module, params={},
+                 verbose=True):
         """Parameter initialization.
 
         Arguments
@@ -39,9 +43,6 @@ class ORGAN(object):
 
             - params. Optional. Dictionary containing the parameters
             that the user whishes to specify.
-
-            - use_gpu. Boolean specifying whether a GPU should be
-            used. True by default.
 
             - verbose. Boolean specifying whether output must be
             produced in-line.
@@ -62,6 +63,10 @@ class ORGAN(object):
 
         # Set parameters
         self.PREFIX = name
+        if 'WGAN' in params:
+            self.WGAN = params['WGAN']
+        else:
+            self.WGAN = False
 
         if 'PRETRAIN_GEN_EPOCHS' in params:
             self.PRETRAIN_GEN_EPOCHS = params['PRETRAIN_GEN_EPOCHS']
@@ -158,7 +163,7 @@ class ORGAN(object):
             self.DIS_FILTER_SIZES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
 
         if 'DIS_NUM_FILTERS' in params:
-            self.DIS_NUM_FILTERS = params['DIS_FILTER_SIZES']
+            self.DIS_NUM_FILTERS = params['DIS_NUM_FILTERS']
         else:
             self.DIS_NUM_FILTERS = [100, 200, 200, 200, 200, 100,
                                     100, 100, 100, 100, 160, 160]
@@ -167,10 +172,23 @@ class ORGAN(object):
             self.DIS_DROPOUT = params['DIS_DROPOUT']
         else:
             self.DIS_DROPOUT = 0.75
+        if 'DIS_GRAD_CLIP' in params:
+            self.DIS_GRAD_CLIP = params['DIS_GRAD_CLIP']
+        else:
+            self.DIS_GRAD_CLIP = 1.0
+
+        if 'WGAN_REG_LAMBDA' in params:
+            self.WGAN_REG_LAMBDA = params['WGAN_REG_LAMBDA']
+        else:
+            self.WGAN_REG_LAMBDA = 1.0
+
         if 'DIS_L2REG' in params:
             self.DIS_L2REG = params['DIS_L2REG']
         else:
             self.DIS_L2REG = 0.2
+
+        if 'TBOARD_LOG' in params:
+            print('Tensorboard functionality')
 
         global mm
         if metrics_module == 'mol_metrics':
@@ -208,7 +226,8 @@ class ORGAN(object):
         self.PAD_CHAR = self.ord_dict[self.NUM_EMB - 1]
         self.PAD_NUM = self.char_dict[self.PAD_CHAR]
         self.DATA_LENGTH = max(map(len, self.train_samples))
-
+        print('Vocabulary:')
+        print(list(self.char_dict.keys()))
         # If MAX_LENGTH has not been specified by the user, it
         # will be set as 1.5 times the maximum length in the
         # trining set.
@@ -232,8 +251,9 @@ class ORGAN(object):
             print('Training set size        :   {} points'.format(
                 len(self.train_samples)))
             print('Max data length          :   {}'.format(self.MAX_LENGTH))
-            print('Avg length to use is     :   {}'.format(
-                np.mean([len(s) for s in to_use])))
+            lens = [len(s) for s in to_use]
+            print('Avg Length to use is     :   {:2.2f} ({:2.2f}) [{:d},{:d}]'.format(
+                np.mean(lens), np.std(lens), np.min(lens), np.max(lens)))
             print('Num valid data points is :   {}'.format(
                 self.POSITIVE_NUM))
             print('Size of alphabet is      :   {}'.format(self.NUM_EMB))
@@ -257,11 +277,24 @@ class ORGAN(object):
         self.gen_loader = Gen_Dataloader(self.GEN_BATCH_SIZE)
         self.dis_loader = Dis_Dataloader()
         self.mle_loader = Gen_Dataloader(self.GEN_BATCH_SIZE)
-        self.generator = Generator(self.NUM_EMB, self.GEN_BATCH_SIZE,
-                                   self.GEN_EMB_DIM, self.GEN_HIDDEN_DIM,
-                                   self.MAX_LENGTH, self.START_TOKEN)
-
-        with tf.variable_scope('discriminator'):
+        if self.WGAN:
+            self.generator = WGenerator(self.NUM_EMB, self.GEN_BATCH_SIZE,
+                                        self.GEN_EMB_DIM, self.GEN_HIDDEN_DIM,
+                                        self.MAX_LENGTH, self.START_TOKEN)
+            self.discriminator = WDiscriminator(
+                sequence_length=self.MAX_LENGTH,
+                num_classes=2,
+                vocab_size=self.NUM_EMB,
+                embedding_size=self.DIS_EMB_DIM,
+                filter_sizes=self.DIS_FILTER_SIZES,
+                num_filters=self.DIS_NUM_FILTERS,
+                l2_reg_lambda=self.DIS_L2REG,
+                wgan_reg_lambda=self.WGAN_REG_LAMBDA,
+                grad_clip=self.DIS_GRAD_CLIP)
+        else:
+            self.generator = Generator(self.NUM_EMB, self.GEN_BATCH_SIZE,
+                                       self.GEN_EMB_DIM, self.GEN_HIDDEN_DIM,
+                                       self.MAX_LENGTH, self.START_TOKEN)
             self.discriminator = Discriminator(
                 sequence_length=self.MAX_LENGTH,
                 num_classes=2,
@@ -269,19 +302,14 @@ class ORGAN(object):
                 embedding_size=self.DIS_EMB_DIM,
                 filter_sizes=self.DIS_FILTER_SIZES,
                 num_filters=self.DIS_NUM_FILTERS,
-                l2_reg_lambda=self.DIS_L2REG)
-        self.dis_params = [param for param in tf.trainable_variables()
-                           if 'discriminator' in param.name]
-        self.dis_global_step = tf.Variable(
-            0, name="global_step", trainable=False)
-        self.dis_optimizer = tf.train.AdamOptimizer(1e-4)
-        self.dis_grads_and_vars = self.dis_optimizer.compute_gradients(
-            self.discriminator.loss, self.dis_params, aggregation_method=2)
-        self.dis_train_op = self.dis_optimizer.apply_gradients(
-            self.dis_grads_and_vars, global_step=self.dis_global_step)
+                l2_reg_lambda=self.DIS_L2REG,
+                grad_clip=self.DIS_GRAD_CLIP)
 
-        self.sess = tf.Session(config=self.config)
-        self.folder = 'checkpoints/{}'.format(self.PREFIX)
+        # run tensorflow
+        self.sess = tf.InteractiveSession()
+        #self.sess = tf.Session(config=self.config)
+
+        #self.tb_write = tf.summary.FileWriter(self.log_dir)
 
     def define_metric(self, name, metric, load_metric=lambda *args: None,
                       pre_batch=False, pre_metric=lambda *args: None):
@@ -622,21 +650,18 @@ class ORGAN(object):
             print('============================\n')
             print('GENERATOR PRETRAINING')
 
-        for epoch in tqdm(range(self.PRETRAIN_GEN_EPOCHS)):
-
+        t_bar = trange(self.PRETRAIN_GEN_EPOCHS)
+        for epoch in t_bar:
             supervised_g_losses = []
             self.gen_loader.reset_pointer()
-
             for it in range(self.gen_loader.num_batch):
                 batch = self.gen_loader.next_batch()
                 _, g_loss, g_pred = self.generator.pretrain_step(self.sess,
                                                                  batch)
                 supervised_g_losses.append(g_loss)
-            loss = np.mean(supervised_g_losses)
-
-            if epoch % 10 == 0:
-
-                print('\t train_loss {}'.format(loss))
+            # print results
+            mean_g_loss = np.mean(supervised_g_losses)
+            t_bar.set_postfix(G_loss=mean_g_loss)
 
         samples = self.generate_samples(self.SAMPLE_NUM)
         self.mle_loader.create_batches(samples)
@@ -645,29 +670,27 @@ class ORGAN(object):
 
             if self.verbose:
                 print('\nDISCRIMINATOR PRETRAINING')
-
-            for i in tqdm(range(self.PRETRAIN_DIS_EPOCHS)):
-
+            t_bar = trange(self.PRETRAIN_DIS_EPOCHS)
+            for i in t_bar:
                 negative_samples = self.generate_samples(self.POSITIVE_NUM)
                 dis_x_train, dis_y_train = self.dis_loader.load_train_data(
                     self.positive_samples, negative_samples)
                 dis_batches = self.dis_loader.batch_iter(
                     zip(dis_x_train, dis_y_train), self.DIS_BATCH_SIZE,
                     self.PRETRAIN_DIS_EPOCHS)
-
+                supervised_d_losses = []
                 for batch in dis_batches:
                     x_batch, y_batch = zip(*batch)
-                    feed = {
-                        self.discriminator.input_x: x_batch,
-                        self.discriminator.input_y: y_batch,
-                        self.discriminator.dropout_keep_prob: self.DIS_DROPOUT
-                    }
-                    _, step, loss, accuracy = self.sess.run(
-                        [self.dis_train_op, self.dis_global_step,
-                         self.discriminator.loss, self.discriminator.accuracy],
-                        feed)
+                    _, d_loss, _, _, _ = self.discriminator.train(
+                        self.sess, x_batch, y_batch, self.DIS_DROPOUT)
+
+                    supervised_d_losses.append(d_loss)
+                # print results
+                mean_d_loss = np.mean(supervised_d_losses)
+                t_bar.set_postfix(D_loss=mean_d_loss)
 
         self.PRETRAINED = True
+        return
 
     def generate_samples(self, num):
         """Generates molecules.
@@ -685,6 +708,23 @@ class ORGAN(object):
             generated_samples.extend(self.generator.generate(self.sess))
 
         return generated_samples
+
+    def report_rewards(self, rewards, metric):
+        print('~~~~~~~~~~~~~~~~~~~~~~~~\n')
+        print('Reward: {}  (lambda={:.2f})'.format(metric, self.LAMBDA))
+        #np.set_printoptions(precision=3, suppress=True)
+        mean_r, std_r = np.mean(rewards), np.std(rewards)
+        min_r, max_r = np.min(rewards), np.max(rewards)
+        print('Stats: {:.3f} ({:.3f}) [{:3f},{:.3f}]'.format(
+            mean_r, std_r, min_r, max_r))
+        non_neg = rewards[rewards > 0.01]
+        if len(non_neg) > 0:
+            mean_r, std_r = np.mean(non_neg), np.std(non_neg)
+            min_r, max_r = np.min(non_neg), np.max(non_neg)
+            print('Valid: {:.3f} ({:.3f}) [{:3f},{:.3f}]'.format(
+                mean_r, std_r, min_r, max_r))
+        #np.set_printoptions(precision=8, suppress=False)
+        return
 
     def train(self, ckpt_dir='checkpoints/'):
         """Trains the model. If necessary, also includes pretraining."""
@@ -711,10 +751,10 @@ class ORGAN(object):
             print('============================\n')
 
         results_rows = []
+        losses = defaultdict(list)
         for nbatch in tqdm(range(self.TOTAL_BATCH)):
 
             results = OrderedDict({'exp_name': self.PREFIX})
-
             metric = self.EDUCATION[nbatch]
 
             if metric in self.AV_METRICS.keys():
@@ -741,7 +781,7 @@ class ORGAN(object):
                 def batch_reward(samples, train_samples=None):
                     decoded = [mm.decode(sample, self.ord_dict)
                                for sample in samples]
-                    pct_unique = len(list(set(decoded))) / float(len(decoded))
+                    pct_unique = mm.uniq_samples(decoded) / float(len(decoded))
                     rewards = reward_func(decoded, self.train_samples)
                     weights = np.array([pct_unique /
                                         float(decoded.count(sample))
@@ -757,30 +797,24 @@ class ORGAN(object):
             results['Batch'] = nbatch
             print('Batch n. {}'.format(nbatch))
             print('============================\n')
+            print('\nGENERATOR TRAINING')
+            print('============================\n')
 
             # results
             mm.compute_results(batch_reward,
-                gen_samples, self.train_samples, self.ord_dict, results)
+                               gen_samples, self.train_samples, self.ord_dict, results)
 
             for it in range(self.GEN_ITERATIONS):
                 samples = self.generator.generate(self.sess)
                 rewards = self.rollout.get_reward(
                     self.sess, samples, 16, self.discriminator,
                     batch_reward, self.LAMBDA)
-                nll = self.generator.generator_step(
+                g_loss = self.generator.generator_step(
                     self.sess, samples, rewards)
+                losses['G-loss'].append(g_loss)
+                self.generator.g_count = self.generator.g_count + 1
+                self.report_rewards(rewards, metric)
 
-                print('Rewards')
-                print('~~~~~~~~~~~~~~~~~~~~~~~~\n')
-                np.set_printoptions(precision=3, suppress=True)
-                mean_r, std_r = np.mean(rewards), np.std(rewards)
-                min_r, max_r = np.min(rewards), np.max(rewards)
-                print('Mean:                {:.3f}'.format(mean_r))
-                print('               +/-   {:.3f}'.format(std_r))
-                print('Min:                 {:.3f}'.format(min_r))
-                print('Max:                 {:.3f}'.format(max_r))
-                np.set_printoptions(precision=8, suppress=False)
-                results['neg-loglike'] = nll
             self.rollout.update_params()
 
             # generate for discriminator
@@ -788,7 +822,7 @@ class ORGAN(object):
                 print('\nDISCRIMINATOR TRAINING')
                 print('============================\n')
                 for i in range(self.DIS_EPOCHS):
-                    print('Discriminator epoch {}...'.format(i+1))
+                    print('Discriminator epoch {}...'.format(i + 1))
 
                     negative_samples = self.generate_samples(self.POSITIVE_NUM)
                     dis_x_train, dis_y_train = self.dis_loader.load_train_data(
@@ -798,30 +832,38 @@ class ORGAN(object):
                         self.DIS_BATCH_SIZE, self.DIS_EPOCHS
                     )
 
+                    d_losses, ce_losses, l2_losses, w_loss = [], [], [], []
                     for batch in dis_batches:
                         x_batch, y_batch = zip(*batch)
-                        feed = {
-                            self.discriminator.input_x: x_batch,
-                            self.discriminator.input_y: y_batch,
-                            self.discriminator.dropout_keep_prob:
-                                self.DIS_DROPOUT
-                        }
-                        _, step, d_loss, accuracy = self.sess.run(
-                            [self.dis_train_op, self.dis_global_step,
-                             self.discriminator.loss,
-                             self.discriminator.accuracy],
-                            feed)
+                        _, d_loss, ce_loss, l2_loss, w_loss = self.discriminator.train(
+                            self.sess, x_batch, y_batch, self.DIS_DROPOUT)
+                        d_losses.append(d_loss)
+                        ce_losses.append(ce_loss)
+                        l2_losses.append(l2_loss)
 
-                    results['D_loss_{}'.format(i)] = d_loss
-                    results['Accuracy_{}'.format(i)] = accuracy
+                    losses['D-loss'].append(np.mean(d_losses))
+                    losses['CE-loss'].append(np.mean(ce_losses))
+                    losses['L2-loss'].append(np.mean(l2_losses))
+                    losses['WGAN-loss'].append(np.mean(l2_losses))
+
+                    self.discriminator.d_count = self.discriminator.d_count + 1
+
                 print('\nDiscriminator trained.')
+
             results_rows.append(results)
+
+            # save model
             if nbatch % self.EPOCH_SAVES == 0 or \
                nbatch == self.TOTAL_BATCH - 1:
 
                 if results_rows is not None:
                     df = pd.DataFrame(results_rows)
-                    df.to_csv('{}_results.csv'.format(self.PREFIX), index=False)
+                    df.to_csv('{}_results.csv'.format(
+                        self.PREFIX), index=False)
+                for key, val in losses.items():
+                    v_arr = np.array(val)
+                    np.save('{}_{}.npy'.format(self.PREFIX, key), v_arr)
+
                 if nbatch is None:
                     label = 'final'
                 else:
@@ -829,7 +871,8 @@ class ORGAN(object):
 
                 # save models
                 model_saver = tf.train.Saver()
-                ckpt_dir = os.path.join(self.CHK_PATH, self.folder)
+                ckpt_dir = self.CHK_PATH
+
                 if not os.path.exists(ckpt_dir):
                     os.makedirs(ckpt_dir)
                 ckpt_file = os.path.join(
@@ -838,4 +881,3 @@ class ORGAN(object):
                 print('\nModel saved at {}'.format(path))
 
         print('\n######### FINISHED #########')
-
