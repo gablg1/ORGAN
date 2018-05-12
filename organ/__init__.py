@@ -781,7 +781,7 @@ class ORGAN(object):
                 def batch_reward(samples, train_samples=None):
                     decoded = [mm.decode(sample, self.ord_dict)
                                for sample in samples]
-                    pct_unique = mm.uniq_samples(decoded) / float(len(decoded))
+                    pct_unique = len(list(set(decoded))) / float(len(decoded))
                     rewards = reward_func(decoded, self.train_samples)
                     weights = np.array([pct_unique /
                                         float(decoded.count(sample))
