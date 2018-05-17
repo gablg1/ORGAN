@@ -601,12 +601,15 @@ def batch_solubility(smiles, train_smiles=None):
 
 
 def logP(smile, train_smiles=None):
-    low_logp = -2.12178879609
-    high_logp = 6.0429063424
-    logp = Crippen.MolLogP(Chem.MolFromSmiles(smile))
-    val = remap(logp, low_logp, high_logp)
-    val = np.clip(val, 0.0, 1.0)
-    return val
+    try:
+        low_logp = -2.12178879609
+        high_logp = 6.0429063424
+        logp = Crippen.MolLogP(Chem.MolFromSmiles(smile))
+        val = remap(logp, low_logp, high_logp)
+        val = np.clip(val, 0.0, 1.0)
+        return val
+    except ValueError:
+        return 0.0
 
 #====== druglikeliness
 
