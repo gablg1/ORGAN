@@ -1,4 +1,4 @@
-tensorflow==1.0.0
+tensorflow==2.5.0
 future==0.16.0
 editdistance==0.3.1
 tqdm
