@@ -321,6 +321,8 @@ def build_vocab(smiles=None, pad_char='_', start_char='^'):
     chars = chars + ['@']
     # directional bonds
     chars = chars + ['/', '\\']
+    # Disconnected structures
+    chars = chars + ['.']
 
     char_dict = {}
     char_dict[start_char] = 0
